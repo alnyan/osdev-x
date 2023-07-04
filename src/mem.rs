@@ -1,0 +1,1 @@
+pub const KERNEL_VIRT_OFFSET: usize = 0xFFFFFF8000000000;
