@@ -12,12 +12,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "gentables"
+version = "0.1.0"
+dependencies = [
+ "tables",
+]
+
+[[package]]
 name = "osdev-x"
 version = "0.1.0"
 dependencies = [
  "aarch64-cpu",
+ "tables",
  "tock-registers",
 ]
+
+[[package]]
+name = "tables"
+version = "0.1.0"
 
 [[package]]
 name = "tock-registers"
