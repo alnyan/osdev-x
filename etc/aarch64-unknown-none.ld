@@ -11,6 +11,10 @@ SECTIONS {
         *(.text.lower)
     }
 
+    .data.tables : {
+        *(.data.tables)
+    }
+
     . = ALIGN(16);
     . = . + KERNEL_VIRT_OFFSET;
 
@@ -35,6 +39,7 @@ SECTIONS {
     .bss : AT(. - KERNEL_VIRT_OFFSET) {
         *(COMMON)
         *(.bss*)
+        . = ALIGN(4K);
     }
     PROVIDE(__bss_end_phys = . - KERNEL_VIRT_OFFSET);
 

@@ -10,7 +10,6 @@
   "max-atomic-width": 128,
   "panic-strategy": "abort",
   "relocation-model": "pic",
-  "supported-sanitizers": [],
   "target-pointer-width": "64",
   "post-link-args": {
     "ld.lld": ["-Tetc/aarch64-unknown-none.ld"]

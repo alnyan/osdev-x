@@ -26,11 +26,14 @@ all: kernel
 kernel-raw:
 	cargo build $(CARGO_BUILD_ARGS)
 
-kernel: kernel-raw
-	cp $(O)/osdev-x $(O)/kernel
+gentables:
+	cargo build -p gentables
+
+kernel: kernel-raw gentables
+	target/debug/gentables $(O)/osdev-x
 
 kernel-bin: kernel
-	llvm-objcopy -O binary $(O)/kernel $(O)/kernel.bin
+	llvm-objcopy -O binary $(O)/osdev-x $(O)/kernel.bin
 
 qemu: kernel-bin
 	qemu-system-aarch64 $(QEMU_OPTS) -kernel $(O)/kernel.bin
