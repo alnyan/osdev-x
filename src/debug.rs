@@ -3,14 +3,18 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use crate::{mem::KERNEL_VIRT_OFFSET, util::OneTimeInit};
+use crate::{
+    mem::KERNEL_VIRT_OFFSET,
+    pl011::{Pl011, SerialDevice},
+    util::OneTimeInit,
+};
 
 pub struct EarlyPrinter {
     addr: *mut u8,
 }
 
 pub struct DebugPrinter {
-    addr: *mut u8,
+    sink: &'static dyn SerialDevice,
 }
 
 pub trait EarlyPrint<T> {
@@ -32,6 +36,8 @@ macro_rules! debugln {
 
 pub static EARLY_DEBUG_ENABLED: AtomicBool = AtomicBool::new(true);
 pub static DEBUG_PRINTER: OneTimeInit<DebugPrinter> = OneTimeInit::new();
+
+pub static PL011: Pl011 = Pl011::new(0x09000000);
 
 impl EarlyPrinter {
     pub fn new(addr: *mut u8) -> Self {
@@ -64,7 +70,7 @@ impl fmt::Write for DebugPrinter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for c in s.bytes() {
             unsafe {
-                self.addr.write_volatile(c);
+                self.sink.send(c);
             }
         }
 
@@ -73,9 +79,8 @@ impl fmt::Write for DebugPrinter {
 }
 
 pub fn init() {
-    DEBUG_PRINTER.init(DebugPrinter {
-        addr: 0xFFFFFF8040200000 as *mut u8,
-    });
+    PL011.init();
+    DEBUG_PRINTER.init(DebugPrinter { sink: &PL011 });
     EARLY_DEBUG_ENABLED.store(false, Ordering::Release);
 }
 

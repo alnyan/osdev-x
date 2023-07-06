@@ -14,6 +14,8 @@ pub mod exception;
 pub mod mem;
 pub mod util;
 
+pub mod pl011;
+
 #[panic_handler]
 fn panic_handler(pi: &core::panic::PanicInfo) -> ! {
     if debug::EARLY_DEBUG_ENABLED.load(Ordering::Acquire) {
