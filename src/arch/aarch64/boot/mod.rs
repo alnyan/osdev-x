@@ -4,11 +4,13 @@ use aarch64_cpu::registers::{
     CurrentEL, CPACR_EL1, ELR_EL1, ID_AA64MMFR0_EL1, SCTLR_EL1, SPSR_EL1, SP_EL0, TCR_EL1,
     TTBR0_EL1, TTBR1_EL1,
 };
-use tables::KernelTables;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use crate::{
-    debug, exception,
+    arch::PLATFORM,
+    debug,
+    device::Platform,
+    exception,
     mem::{self, Virtualize, INITIAL_TABLES, KERNEL_VIRT_OFFSET},
 };
 
@@ -87,18 +89,18 @@ extern "C" fn __aarch64_lower_entry(dtb_phys: usize, tables_phys: u64) -> ! {
     }
 }
 
-extern "C" fn __aarch64_upper_entry(_dtb_phys: usize) {
+extern "C" fn __aarch64_upper_entry(_dtb_phys: usize) -> ! {
     // Setup proper debugging functions
     // NOTE it is critical that the code does not panic
     unsafe {
         mem::mmu_init();
+        PLATFORM.init_primary_serial();
     }
-
     debug::init();
 
     exception::init_exceptions();
 
-    debugln!("Test {}", 1.123);
+    debugln!("XXX");
 
     loop {}
 }

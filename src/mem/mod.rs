@@ -42,7 +42,7 @@ unsafe impl<T> Virtualize for *const T {
 }
 
 pub unsafe fn mmu_init() {
-    let mut initial_tables: usize = 0;
+    let mut initial_tables: usize;
     core::arch::asm!("ldr {0}, ={1}", out(reg) initial_tables, sym INITIAL_TABLES);
     let initial_tables = initial_tables.virtualize() as *const KernelTables;
 

@@ -1,6 +1,6 @@
 use tables::{KernelTables, RawTable};
 
-use super::{device::DeviceMemoryIo, KERNEL_VIRT_OFFSET};
+use super::KERNEL_VIRT_OFFSET;
 
 pub struct FixedTables {
     l1: RawTable,

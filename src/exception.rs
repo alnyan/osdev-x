@@ -7,13 +7,12 @@ pub fn init_exceptions() {
     extern "C" {
         static __aarch64_el1_vectors: u8;
     }
-    let vbar = unsafe {
-        &__aarch64_el1_vectors as *const _
-    };
+    let vbar = unsafe { &__aarch64_el1_vectors as *const _ };
     VBAR_EL1.set(vbar as u64);
 }
 
-global_asm!(r#"
+global_asm!(
+    r#"
 .macro EXC_VECTOR el, ht, bits, kind
 .p2align 7
     b .
@@ -41,4 +40,5 @@ __aarch64_el1_vectors:
     EXC_VECTOR 0, t, 32, irq
     EXC_VECTOR 0, t, 32, fiq
     EXC_VECTOR 0, t, 32, serror
-"#);
+"#
+);

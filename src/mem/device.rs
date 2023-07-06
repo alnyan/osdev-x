@@ -2,6 +2,7 @@ use core::{marker::PhantomData, mem::size_of, ops::Deref};
 
 use super::fixed::KERNEL_TABLES;
 
+#[allow(unused)]
 pub struct DeviceMemory {
     name: &'static str,
     base: usize,

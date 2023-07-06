@@ -2,52 +2,33 @@
 #![no_std]
 #![no_main]
 
-use core::sync::atomic::Ordering;
-
-use crate::debug::{EarlyPrint, EarlyPrinter};
+use crate::debug::debug_internal;
 
 #[macro_use]
 pub mod debug;
 
-pub mod boot;
+pub mod arch;
+pub mod device;
 pub mod exception;
 pub mod mem;
 pub mod util;
 
-pub mod pl011;
-
 #[panic_handler]
 fn panic_handler(pi: &core::panic::PanicInfo) -> ! {
-    if debug::EARLY_DEBUG_ENABLED.load(Ordering::Acquire) {
-        const EARLY_PRINT_ADDR: *mut u8 = 0x9000000 as *mut u8;
-        let printer = EarlyPrinter::new(EARLY_PRINT_ADDR);
+    debugln!("--- BEGIN PANIC ---");
+    debug!("Kernel panic ");
 
-        if let Some(msg) = pi.message() {
-            unsafe {
-                printer.early_print("Early kernel panic: ");
-            }
-            let msg = if let Some(msg) = msg.as_str() {
-                msg
-            } else {
-                "-formatted string-"
-            };
-
-            unsafe {
-                printer.early_print(msg);
-                printer.early_print("\n");
-            }
-        }
-
-        if let Some(loc) = pi.location() {
-            unsafe {
-                printer.early_print("In source file: ");
-                printer.early_print(loc.file());
-                printer.early_print("\n");
-            }
-        }
-
-        loop {}
+    if let Some(location) = pi.location() {
+        debugln!("at {}:{}:", location.file(), location.line());
     } else {
-        loop {}
+        debugln!(":");
     }
+
+    if let Some(msg) = pi.message() {
+        debug_internal(*msg);
+        debugln!();
+    }
+    debugln!("---  END PANIC  ---");
+
+    loop {}
 }

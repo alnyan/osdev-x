@@ -1,24 +1,13 @@
-use core::{
-    fmt::{self, Arguments},
-    sync::atomic::{AtomicBool, Ordering},
-};
+use core::fmt::{self, Arguments};
 
 use crate::{
-    mem::KERNEL_VIRT_OFFSET,
-    pl011::{Pl011, SerialDevice},
+    arch::PLATFORM,
+    device::{serial::SerialDevice, Platform},
     util::OneTimeInit,
 };
 
-pub struct EarlyPrinter {
-    addr: *mut u8,
-}
-
 pub struct DebugPrinter {
     sink: &'static dyn SerialDevice,
-}
-
-pub trait EarlyPrint<T> {
-    unsafe fn early_print(&self, t: T);
 }
 
 #[allow(unused_macros)]
@@ -30,48 +19,16 @@ macro_rules! debug {
 
 #[allow(unused_macros)]
 macro_rules! debugln {
-    () => {};
+    () => (debug!("\n"));
     ($($args:tt)+) => (debug!("{}\n", format_args!($($args)+)))
 }
 
-pub static EARLY_DEBUG_ENABLED: AtomicBool = AtomicBool::new(true);
-pub static DEBUG_PRINTER: OneTimeInit<DebugPrinter> = OneTimeInit::new();
-
-pub static PL011: Pl011 = Pl011::new(0x09000000);
-
-impl EarlyPrinter {
-    pub fn new(addr: *mut u8) -> Self {
-        Self { addr }
-    }
-}
-
-impl EarlyPrint<u8> for EarlyPrinter {
-    unsafe fn early_print(&self, t: u8) {
-        self.addr.write_volatile(t);
-    }
-}
-
-impl EarlyPrint<&str> for EarlyPrinter {
-    unsafe fn early_print(&self, t: &str) {
-        let t_len = t.bytes().len();
-        let mut t_ptr = t.as_ptr();
-
-        if t_ptr as usize > KERNEL_VIRT_OFFSET {
-            t_ptr = (t_ptr as usize - KERNEL_VIRT_OFFSET) as *mut u8;
-        }
-
-        for i in 0..t_len {
-            self.addr.write_volatile(t_ptr.add(i).read());
-        }
-    }
-}
+static DEBUG_PRINTER: OneTimeInit<DebugPrinter> = OneTimeInit::new();
 
 impl fmt::Write for DebugPrinter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for c in s.bytes() {
-            unsafe {
-                self.sink.send(c);
-            }
+            self.sink.send(c);
         }
 
         Ok(())
@@ -79,18 +36,16 @@ impl fmt::Write for DebugPrinter {
 }
 
 pub fn init() {
-    PL011.init();
-    DEBUG_PRINTER.init(DebugPrinter { sink: &PL011 });
-    EARLY_DEBUG_ENABLED.store(false, Ordering::Release);
+    DEBUG_PRINTER.init(DebugPrinter {
+        sink: PLATFORM.primary_serial().unwrap(),
+    });
 }
 
 #[doc = "hide"]
 pub fn debug_internal(args: Arguments) {
     use fmt::Write;
 
-    if EARLY_DEBUG_ENABLED.load(Ordering::Acquire) {
-        loop {}
-    } else {
+    if DEBUG_PRINTER.is_initialized() {
         DEBUG_PRINTER.get_mut().write_fmt(args).ok();
     }
 }
