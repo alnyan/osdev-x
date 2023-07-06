@@ -1,12 +1,13 @@
 use core::arch::asm;
 
 use aarch64_cpu::registers::{
-    CurrentEL, CPACR_EL1, ID_AA64MMFR0_EL1, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1, ELR_EL1, SPSR_EL1, ESR_EL1, SP_EL1, SP_EL0,
+    CurrentEL, CPACR_EL1, ELR_EL1, ESR_EL1, ID_AA64MMFR0_EL1, SCTLR_EL1, SPSR_EL1, SP_EL0, SP_EL1,
+    TCR_EL1, TTBR0_EL1, TTBR1_EL1,
 };
 use tables::KernelTables;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-use crate::mem::KERNEL_VIRT_OFFSET;
+use crate::mem::{Virtualize, KERNEL_VIRT_OFFSET};
 
 const BSP_STACK_SIZE: usize = 32768;
 
@@ -76,18 +77,17 @@ extern "C" fn __aarch64_lower_entry(dtb_phys: usize, tables_phys: u64) -> ! {
 
     mmu_init(tables_phys);
 
-    let sp = BSP_STACK.data.as_ptr() as u64 + (BSP_STACK_SIZE + KERNEL_VIRT_OFFSET) as u64;
-    let elr = __aarch64_upper_entry as u64 + KERNEL_VIRT_OFFSET as u64;
-    SP_EL0.set(sp);
-    ELR_EL1.set(elr);
+    let sp = unsafe { BSP_STACK.data.as_ptr().add(BSP_STACK_SIZE).virtualize() };
+    let elr = unsafe { (__aarch64_upper_entry as usize).virtualize() };
+    SP_EL0.set(sp as u64);
+    ELR_EL1.set(elr as u64);
     SPSR_EL1.write(SPSR_EL1::M::EL1t);
 
-    #[optimize(O3)]
-    aarch64_cpu::asm::eret();
-
-    loop {}
+    unsafe {
+        asm!("mov x0, {0}; eret", in(reg) dtb_phys, options(noreturn));
+    }
 }
 
-extern "C" fn __aarch64_upper_entry() {
+extern "C" fn __aarch64_upper_entry(_dtb_phys: usize) {
     loop {}
 }
