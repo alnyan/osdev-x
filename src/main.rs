@@ -10,7 +10,9 @@ use crate::debug::{EarlyPrint, EarlyPrinter};
 pub mod debug;
 
 pub mod boot;
+pub mod exception;
 pub mod mem;
+pub mod util;
 
 #[panic_handler]
 fn panic_handler(pi: &core::panic::PanicInfo) -> ! {

@@ -1,13 +1,16 @@
 use core::arch::asm;
 
 use aarch64_cpu::registers::{
-    CurrentEL, CPACR_EL1, ELR_EL1, ESR_EL1, ID_AA64MMFR0_EL1, SCTLR_EL1, SPSR_EL1, SP_EL0, SP_EL1,
-    TCR_EL1, TTBR0_EL1, TTBR1_EL1,
+    CurrentEL, CPACR_EL1, ELR_EL1, ID_AA64MMFR0_EL1, SCTLR_EL1, SPSR_EL1, SP_EL0, TCR_EL1,
+    TTBR0_EL1, TTBR1_EL1,
 };
 use tables::KernelTables;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-use crate::mem::{Virtualize, KERNEL_VIRT_OFFSET};
+use crate::{
+    debug, exception,
+    mem::{self, Virtualize, INITIAL_TABLES, KERNEL_VIRT_OFFSET},
+};
 
 const BSP_STACK_SIZE: usize = 32768;
 
@@ -15,10 +18,6 @@ const BSP_STACK_SIZE: usize = 32768;
 struct KernelStack {
     data: [u8; BSP_STACK_SIZE],
 }
-
-#[link_section = ".data.tables"]
-#[no_mangle]
-static mut KERNEL_TABLES: KernelTables = KernelTables::zeroed();
 
 #[link_section = ".bss"]
 static BSP_STACK: KernelStack = KernelStack {
@@ -59,7 +58,7 @@ unsafe extern "C" fn __aarch64_entry() -> ! {
         bl {kernel_lower_entry} - {kernel_virt_offset}
 "#,
         kernel_lower_entry = sym __aarch64_lower_entry,
-        kernel_tables = sym KERNEL_TABLES,
+        kernel_tables = sym INITIAL_TABLES,
         stack_bottom = sym BSP_STACK,
         stack_size = const BSP_STACK_SIZE,
         kernel_virt_offset = const KERNEL_VIRT_OFFSET,
@@ -89,5 +88,17 @@ extern "C" fn __aarch64_lower_entry(dtb_phys: usize, tables_phys: u64) -> ! {
 }
 
 extern "C" fn __aarch64_upper_entry(_dtb_phys: usize) {
+    // Setup proper debugging functions
+    // NOTE it is critical that the code does not panic
+    unsafe {
+        mem::mmu_init();
+    }
+
+    debug::init();
+
+    exception::init_exceptions();
+
+    debugln!("Test {}", 1.123);
+
     loop {}
 }

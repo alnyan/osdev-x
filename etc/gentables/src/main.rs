@@ -131,14 +131,14 @@ fn generate_tables<S: Read + Seek>(file: S) -> (KernelTables, u64) {
     let l1i = (kernel_start >> 30) & 0x1FF;
     let l2i = (kernel_start >> 21) & 0x1FF;
     let l2_table_base = tables_paddr + 0x1000;
-    let l3_table_base = tables_paddr + 0x3000;
+    let l3_table_base = tables_paddr + 0x2000;
 
     // Map 1G in which the kernel is placed to L2 table
     tables.l1.data[l1i as usize] =
         l2_table_base | (PageAttributes::PRESENT | PageAttributes::TABLE).bits();
 
     // Map 2M in which the kernel is placed to L3 table
-    tables.l2[0].data[l2i as usize] =
+    tables.l2.data[l2i as usize] =
         l3_table_base | (PageAttributes::PRESENT | PageAttributes::TABLE).bits();
 
     // Map the kernel pages
@@ -159,7 +159,7 @@ fn generate_tables<S: Read + Seek>(file: S) -> (KernelTables, u64) {
         );
 
         for page in (segment_start..segment_end).step_by(0x1000) {
-            map_page(&mut tables.l3[0], page, phdr.p_flags);
+            map_page(&mut tables.l3, page, phdr.p_flags);
         }
     }
 

@@ -1,11 +1,15 @@
 use core::{
-    fmt::Arguments,
+    fmt::{self, Arguments},
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use crate::mem::KERNEL_VIRT_OFFSET;
+use crate::{mem::KERNEL_VIRT_OFFSET, util::OneTimeInit};
 
 pub struct EarlyPrinter {
+    addr: *mut u8,
+}
+
+pub struct DebugPrinter {
     addr: *mut u8,
 }
 
@@ -27,6 +31,7 @@ macro_rules! debugln {
 }
 
 pub static EARLY_DEBUG_ENABLED: AtomicBool = AtomicBool::new(true);
+pub static DEBUG_PRINTER: OneTimeInit<DebugPrinter> = OneTimeInit::new();
 
 impl EarlyPrinter {
     pub fn new(addr: *mut u8) -> Self {
@@ -55,11 +60,32 @@ impl EarlyPrint<&str> for EarlyPrinter {
     }
 }
 
+impl fmt::Write for DebugPrinter {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for c in s.bytes() {
+            unsafe {
+                self.addr.write_volatile(c);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub fn init() {
+    DEBUG_PRINTER.init(DebugPrinter {
+        addr: 0xFFFFFF8040200000 as *mut u8,
+    });
+    EARLY_DEBUG_ENABLED.store(false, Ordering::Release);
+}
+
 #[doc = "hide"]
-pub fn debug_internal(_args: Arguments) {
+pub fn debug_internal(args: Arguments) {
+    use fmt::Write;
+
     if EARLY_DEBUG_ENABLED.load(Ordering::Acquire) {
         loop {}
     } else {
-        loop {}
+        DEBUG_PRINTER.get_mut().write_fmt(args).ok();
     }
 }

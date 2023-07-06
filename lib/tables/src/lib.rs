@@ -14,12 +14,12 @@ pub struct RawTable {
 #[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 #[repr(C, align(0x1000))]
 pub struct KernelTables {
-    // 1G
+    // 1G tables
     pub l1: RawTable,
-    // 2M
-    pub l2: [RawTable; 2],
-    // 4K
-    pub l3: [RawTable; 4],
+    // 2M tables
+    pub l2: RawTable,
+    // 4K pages
+    pub l3: RawTable,
 }
 
 impl RawTable {
@@ -32,8 +32,8 @@ impl KernelTables {
     pub const fn zeroed() -> Self {
         Self {
             l1: RawTable::zeroed(),
-            l2: [RawTable::zeroed(); 2],
-            l3: [RawTable::zeroed(); 4],
+            l2: RawTable::zeroed(),
+            l3: RawTable::zeroed(),
         }
     }
 }
