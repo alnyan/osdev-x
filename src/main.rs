@@ -1,4 +1,4 @@
-#![feature(naked_functions, asm_const, panic_info_message)]
+#![feature(naked_functions, asm_const, panic_info_message, optimize_attribute)]
 #![no_std]
 #![no_main]
 
