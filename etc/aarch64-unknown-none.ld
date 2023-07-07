@@ -32,6 +32,7 @@ SECTIONS {
     . = ALIGN(4K);
     .data : AT(. - KERNEL_VIRT_OFFSET) {
         *(.data*)
+        *(.got*)
     }
 
     . = ALIGN(4K);

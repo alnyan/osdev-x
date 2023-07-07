@@ -27,10 +27,12 @@ macro_rules! log_print {
 
 macro_rules! debug_tpl {
     ($d:tt $name:ident, $nameln:ident, $level:ident) => {
+        #[allow(unused_macros)]
         macro_rules! $name {
             ($d($d args:tt)+) => (log_print!($crate::debug::LogLevel::$level, format_args!($d($d args)+)));
         }
 
+        #[allow(unused_macros)]
         macro_rules! $nameln {
             () => {
                 $name!("\n")

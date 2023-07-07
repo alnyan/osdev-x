@@ -11,7 +11,7 @@ use crate::{
     arch::PLATFORM,
     debug,
     device::Platform,
-    mem::{self, Virtualize, INITIAL_TABLES, KERNEL_VIRT_OFFSET},
+    mem::{self, ConvertAddress, INITIAL_TABLES, KERNEL_VIRT_OFFSET},
 };
 
 const BSP_STACK_SIZE: usize = 32768;
@@ -99,16 +99,6 @@ extern "C" fn __aarch64_upper_entry(_dtb_phys: usize) -> ! {
     debug::init();
 
     exception::init_exceptions();
-
-    debugln!("DDD");
-    infoln!("III");
-    warnln!("WWW");
-    errorln!("EEE");
-
-    unsafe {
-        let ptr = 0x121231231234343 as *mut u8;
-        ptr.write_volatile(123);
-    }
 
     todo!()
 }

@@ -1,4 +1,10 @@
-#![feature(naked_functions, asm_const, panic_info_message, optimize_attribute)]
+#![feature(
+    naked_functions,
+    asm_const,
+    panic_info_message,
+    optimize_attribute,
+    const_trait_impl
+)]
 #![no_std]
 #![no_main]
 
@@ -6,8 +12,9 @@ use crate::debug::{debug_internal, LogLevel};
 
 #[macro_use]
 pub mod debug;
-
+#[macro_use]
 pub mod arch;
+
 pub mod device;
 pub mod mem;
 pub mod util;

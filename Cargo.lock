@@ -223,6 +223,7 @@ name = "osdev-x"
 version = "0.1.0"
 dependencies = [
  "aarch64-cpu",
+ "bitflags",
  "tables",
  "tock-registers",
 ]
