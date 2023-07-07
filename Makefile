@@ -23,6 +23,9 @@ endif
 
 all: kernel
 
+clippy:
+	cargo clippy $(CARGO_BUILD_ARGS)
+
 kernel-raw:
 	cargo build $(CARGO_BUILD_ARGS)
 

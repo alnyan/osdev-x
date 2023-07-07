@@ -41,7 +41,7 @@ impl FixedTables {
 
     pub fn map_4k(&mut self, phys: usize) -> usize {
         if self.l3_page_index == 512 {
-            loop {}
+            panic!("Ran out of device mapping memory");
         }
 
         let virt = (1 << 30) | (1 << 21) | (self.l3_page_index << 12) | KERNEL_VIRT_OFFSET;

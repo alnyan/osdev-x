@@ -1,6 +1,7 @@
 use core::{
     cell::UnsafeCell,
     mem::MaybeUninit,
+    panic,
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -25,13 +26,17 @@ impl<T> OneTimeInit<T> {
         self.state.load(Ordering::Acquire)
     }
 
+    #[track_caller]
     pub fn init(&self, value: T) {
         if self
             .state
             .compare_exchange(false, true, Ordering::Release, Ordering::Relaxed)
             .is_err()
         {
-            loop {}
+            panic!(
+                "{:?}: Double initialization of OneTimeInit<T>",
+                panic::Location::caller()
+            );
         }
 
         unsafe {
@@ -39,18 +44,27 @@ impl<T> OneTimeInit<T> {
         }
     }
 
+    #[track_caller]
     pub fn get(&self) -> &T {
         if !self.state.load(Ordering::Acquire) {
-            // TODO handle this
-            loop {}
+            panic!(
+                "{:?}: Attempt to dereference an uninitialized value",
+                panic::Location::caller()
+            );
         }
 
         unsafe { (*self.value.get()).assume_init_ref() }
     }
 
+    // FIXME remove this and add a spinlock instead
+    #[allow(clippy::mut_from_ref)]
+    #[track_caller]
     pub fn get_mut(&self) -> &mut T {
         if !self.state.load(Ordering::Acquire) {
-            loop {}
+            panic!(
+                "{:?}: Attempt to dereference an uninitialized value",
+                panic::Location::caller()
+            );
         }
 
         unsafe { (*self.value.get()).assume_init_mut() }

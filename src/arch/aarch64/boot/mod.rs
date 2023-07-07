@@ -6,11 +6,11 @@ use aarch64_cpu::registers::{
 };
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
+use super::exception;
 use crate::{
     arch::PLATFORM,
     debug,
     device::Platform,
-    exception,
     mem::{self, Virtualize, INITIAL_TABLES, KERNEL_VIRT_OFFSET},
 };
 
@@ -100,7 +100,15 @@ extern "C" fn __aarch64_upper_entry(_dtb_phys: usize) -> ! {
 
     exception::init_exceptions();
 
-    debugln!("XXX");
+    debugln!("DDD");
+    infoln!("III");
+    warnln!("WWW");
+    errorln!("EEE");
 
-    loop {}
+    unsafe {
+        let ptr = 0x121231231234343 as *mut u8;
+        ptr.write_volatile(123);
+    }
+
+    todo!()
 }

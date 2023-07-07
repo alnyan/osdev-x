@@ -17,7 +17,7 @@ pub struct DeviceMemoryIo<T> {
 impl DeviceMemory {
     pub unsafe fn map(name: &'static str, phys: usize, size: usize) -> Self {
         if size > 0x1000 {
-            loop {}
+            todo!("Device memory mappings larger than 4K");
         }
 
         let base = KERNEL_TABLES.map_4k(phys);
