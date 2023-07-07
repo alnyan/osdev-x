@@ -8,6 +8,8 @@ pub struct QemuPlatform {
 }
 
 impl Platform for QemuPlatform {
+    const KERNEL_PHYS_BASE: usize = 0x40080000;
+
     unsafe fn init(&self) {}
 
     unsafe fn init_primary_serial(&self) {

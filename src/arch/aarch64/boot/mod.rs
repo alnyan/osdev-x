@@ -8,10 +8,10 @@ use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use super::exception;
 use crate::{
-    arch::PLATFORM,
+    arch::{aarch64::INITIAL_TABLES, ARCHITECTURE, PLATFORM},
     debug,
-    device::Platform,
-    mem::{self, ConvertAddress, INITIAL_TABLES, KERNEL_VIRT_OFFSET},
+    device::{Architecture, Platform},
+    mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
 };
 
 const BSP_STACK_SIZE: usize = 32768;
@@ -93,7 +93,7 @@ extern "C" fn __aarch64_upper_entry(_dtb_phys: usize) -> ! {
     // Setup proper debugging functions
     // NOTE it is critical that the code does not panic
     unsafe {
-        mem::mmu_init();
+        ARCHITECTURE.init_mmu();
         PLATFORM.init_primary_serial();
     }
     debug::init();

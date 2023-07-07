@@ -1,7 +1,5 @@
 use core::{marker::PhantomData, mem::size_of, ops::Deref};
 
-use super::fixed::KERNEL_TABLES;
-
 #[allow(unused)]
 pub struct DeviceMemory {
     name: &'static str,
@@ -20,6 +18,7 @@ impl DeviceMemory {
             todo!("Device memory mappings larger than 4K");
         }
 
+        use crate::arch::aarch64::table::KERNEL_TABLES;
         let base = KERNEL_TABLES.map_4k(phys);
 
         Self { name, base, size }
