@@ -8,10 +8,11 @@ use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use super::exception;
 use crate::{
+    absolute_address,
     arch::{aarch64::INITIAL_TABLES, ARCHITECTURE, PLATFORM},
     debug,
     device::{Architecture, Platform},
-    mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
+    mem::{table::KERNEL_TABLES, ConvertAddress, KERNEL_PHYS_BASE, KERNEL_VIRT_OFFSET},
 };
 
 const BSP_STACK_SIZE: usize = 32768;
@@ -21,10 +22,23 @@ struct KernelStack {
     data: [u8; BSP_STACK_SIZE],
 }
 
-#[link_section = ".bss"]
-static BSP_STACK: KernelStack = KernelStack {
-    data: [0; BSP_STACK_SIZE],
-};
+pub fn kernel_main(dtb_phys: usize) -> ! {
+    // Setup proper debugging functions
+    // NOTE it is critical that the code does not panic
+    unsafe {
+        ARCHITECTURE.init_mmu();
+        PLATFORM.init_primary_serial();
+    }
+    debug::init();
+    debugln!("DTB is at {:#20x}", dtb_phys);
+
+    exception::init_exceptions();
+
+    // XXX this does not compile
+    let x = unsafe { &KERNEL_TABLES };
+
+    todo!()
+}
 
 fn mmu_init(tables_phys: u64) {
     if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::TGran4::Supported) {
@@ -44,6 +58,31 @@ fn mmu_init(tables_phys: u64) {
     TTBR1_EL1.set_baddr(tables_phys);
 
     SCTLR_EL1.modify(SCTLR_EL1::M::Enable);
+}
+
+extern "C" fn __aarch64_lower_entry(dtb_phys: usize, tables_phys: u64) -> ! {
+    // Unmask FP operations
+    CPACR_EL1.modify(CPACR_EL1::FPEN::TrapNothing);
+
+    if CurrentEL.read(CurrentEL::EL) != 1 {
+        panic!("Only EL1 is supported for now");
+    }
+
+    mmu_init(tables_phys);
+
+    let sp = unsafe { BSP_STACK.data.as_ptr().add(BSP_STACK_SIZE).virtualize() };
+    let elr = absolute_address!(__aarch64_upper_entry);
+    SP_EL0.set(sp as u64);
+    ELR_EL1.set(elr as u64);
+    SPSR_EL1.write(SPSR_EL1::M::EL1t);
+
+    unsafe {
+        asm!("mov x0, {0}; eret", in(reg) dtb_phys, options(noreturn));
+    }
+}
+
+extern "C" fn __aarch64_upper_entry(dtb_phys: usize) -> ! {
+    kernel_main(dtb_phys);
 }
 
 #[link_section = ".text.entry"]
@@ -68,37 +107,7 @@ unsafe extern "C" fn __aarch64_entry() -> ! {
     );
 }
 
-extern "C" fn __aarch64_lower_entry(dtb_phys: usize, tables_phys: u64) -> ! {
-    // Unmask FP operations
-    CPACR_EL1.modify(CPACR_EL1::FPEN::TrapNothing);
-
-    if CurrentEL.read(CurrentEL::EL) != 1 {
-        panic!("Only EL1 is supported for now");
-    }
-
-    mmu_init(tables_phys);
-
-    let sp = unsafe { BSP_STACK.data.as_ptr().add(BSP_STACK_SIZE).virtualize() };
-    let elr = unsafe { (__aarch64_upper_entry as usize).virtualize() };
-    SP_EL0.set(sp as u64);
-    ELR_EL1.set(elr as u64);
-    SPSR_EL1.write(SPSR_EL1::M::EL1t);
-
-    unsafe {
-        asm!("mov x0, {0}; eret", in(reg) dtb_phys, options(noreturn));
-    }
-}
-
-extern "C" fn __aarch64_upper_entry(_dtb_phys: usize) -> ! {
-    // Setup proper debugging functions
-    // NOTE it is critical that the code does not panic
-    unsafe {
-        ARCHITECTURE.init_mmu();
-        PLATFORM.init_primary_serial();
-    }
-    debug::init();
-
-    exception::init_exceptions();
-
-    todo!()
-}
+#[link_section = ".bss"]
+static BSP_STACK: KernelStack = KernelStack {
+    data: [0; BSP_STACK_SIZE],
+};

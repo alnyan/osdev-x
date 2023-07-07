@@ -23,6 +23,9 @@ endif
 
 all: kernel
 
+clean:
+	cargo clean
+
 clippy:
 	cargo clippy $(CARGO_BUILD_ARGS)
 

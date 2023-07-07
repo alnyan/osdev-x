@@ -8,7 +8,6 @@ SECTIONS {
 
     .text.entry : {
         *(.text.entry)
-        *(.text.lower)
     }
 
     .data.tables : {
@@ -26,13 +25,14 @@ SECTIONS {
 
     . = ALIGN(4K);
     .rodata : AT(. - KERNEL_VIRT_OFFSET) {
+        *(.eh_frame*)
         *(.rodata*)
     }
 
     . = ALIGN(4K);
     .data : AT(. - KERNEL_VIRT_OFFSET) {
         *(.data*)
-        *(.got*)
+        /* *(.got*) */
     }
 
     . = ALIGN(4K);

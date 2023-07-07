@@ -4,6 +4,7 @@ use crate::{
 };
 
 pub mod device;
+pub mod phys;
 pub mod table;
 
 pub const KERNEL_PHYS_BASE: usize = PlatformImpl::KERNEL_PHYS_BASE;

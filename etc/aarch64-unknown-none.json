@@ -11,6 +11,7 @@
   "panic-strategy": "abort",
   "relocation-model": "pic",
   "target-pointer-width": "64",
+  "eh-frame-header": false,
   "post-link-args": {
     "ld.lld": ["-Tetc/aarch64-unknown-none.ld"]
   }

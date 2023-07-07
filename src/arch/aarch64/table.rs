@@ -35,6 +35,8 @@ pub struct FixedTables {
 
     device_l2i: usize,
     device_l3i: usize,
+
+    pages_l2i: usize,
 }
 
 #[derive(Clone)]
@@ -103,6 +105,18 @@ impl PageEntry<L3> {
 }
 
 impl PageEntry<L2> {
+    pub fn block(phys: usize, attrs: PageAttributes) -> Self {
+        Self(
+            (phys as u64)
+                | (PageAttributes::BLOCK
+                    | PageAttributes::PRESENT
+                    | PageAttributes::ACCESS
+                    | attrs)
+                    .bits(),
+            PhantomData,
+        )
+    }
+
     pub fn table(phys: usize, attrs: PageAttributes) -> Self {
         Self(
             (phys as u64) | (PageAttributes::TABLE | PageAttributes::PRESENT | attrs).bits(),
@@ -192,6 +206,8 @@ impl FixedTables {
 
             device_l2i: L2::index(KERNEL_PHYS_BASE) + 1,
             device_l3i: 0,
+
+            pages_l2i: L2::index(KERNEL_PHYS_BASE) + 2,
         }
     }
 
@@ -212,10 +228,19 @@ impl FixedTables {
             KERNEL_TABLES.device_l3.physical_address(),
             PageAttributes::empty(),
         );
+
+        // Map physical page array
+        let page_array_phys = (self.l1i << 30) | (self.pages_l2i << 21);
+        KERNEL_TABLES.l2[self.pages_l2i] =
+            PageEntry::<L2>::block(page_array_phys, PageAttributes::empty());
     }
 
     pub fn l1_physical_address(&self) -> usize {
         self.l1.physical_address()
+    }
+
+    pub fn page_array_range(&self) -> (usize, usize) {
+        ((self.l1i << 30) | (self.pages_l2i << 21), 1 << 21)
     }
 
     pub fn map_4k(&mut self, phys: usize) -> usize {

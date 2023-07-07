@@ -1,7 +1,12 @@
 use aarch64_cpu::registers::TTBR1_EL1;
+use plat_qemu::PLATFORM;
 use tables::KernelTables;
 
-use crate::{absolute_address, device::Architecture, mem::ConvertAddress};
+use crate::{
+    absolute_address, debug,
+    device::{Architecture, Platform},
+    mem::ConvertAddress,
+};
 
 use self::table::KERNEL_TABLES;
 
