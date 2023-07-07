@@ -5,7 +5,10 @@ use tables::KernelTables;
 use crate::{
     absolute_address, debug,
     device::{Architecture, Platform},
-    mem::ConvertAddress,
+    mem::{
+        phys::{self, PageUsage, PhysicalMemoryRegion},
+        ConvertAddress, KERNEL_VIRT_OFFSET,
+    },
 };
 
 use self::table::KERNEL_TABLES;
@@ -35,4 +38,31 @@ impl Architecture for AArch64 {
 
         TTBR1_EL1.set_baddr(KERNEL_TABLES.l1_physical_address() as u64);
     }
+}
+pub fn kernel_main(dtb_phys: usize) -> ! {
+    // Setup proper debugging functions
+    // NOTE it is critical that the code does not panic
+    unsafe {
+        ARCHITECTURE.init_mmu();
+        PLATFORM.init_primary_serial();
+    }
+    debug::init();
+    debugln!("DTB is at {:#20x}", dtb_phys);
+
+    exception::init_exceptions();
+    let (page_array_base, page_array_size) = unsafe { KERNEL_TABLES.page_array_range() };
+
+    unsafe {
+        phys::init_with_array(
+            core::iter::once(PhysicalMemoryRegion {
+                base: page_array_base + page_array_size,
+                // 8MiB of memory
+                size: (4 << 21),
+            }),
+            page_array_base.virtualize(),
+            page_array_size,
+        );
+    }
+
+    todo!()
 }

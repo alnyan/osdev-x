@@ -6,7 +6,7 @@ use aarch64_cpu::registers::{
 };
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-use super::exception;
+use super::{exception, kernel_main};
 use crate::{
     absolute_address,
     arch::{aarch64::INITIAL_TABLES, ARCHITECTURE, PLATFORM},
@@ -20,24 +20,6 @@ const BSP_STACK_SIZE: usize = 32768;
 #[repr(C, align(0x20))]
 struct KernelStack {
     data: [u8; BSP_STACK_SIZE],
-}
-
-pub fn kernel_main(dtb_phys: usize) -> ! {
-    // Setup proper debugging functions
-    // NOTE it is critical that the code does not panic
-    unsafe {
-        ARCHITECTURE.init_mmu();
-        PLATFORM.init_primary_serial();
-    }
-    debug::init();
-    debugln!("DTB is at {:#20x}", dtb_phys);
-
-    exception::init_exceptions();
-
-    // XXX this does not compile
-    let x = unsafe { &KERNEL_TABLES };
-
-    todo!()
 }
 
 fn mmu_init(tables_phys: u64) {

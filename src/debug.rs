@@ -3,7 +3,7 @@ use core::fmt::{self, Arguments};
 use crate::{
     arch::PLATFORM,
     device::{serial::SerialDevice, Platform},
-    util::OneTimeInit,
+    util::{OneTimeInit, SpinLock},
 };
 
 #[derive(Clone, Copy)]
@@ -48,7 +48,7 @@ debug_tpl!($ warn, warnln, Warning);
 debug_tpl!($ error, errorln, Error);
 debug_tpl!($ fatal, fatalln, Fatal);
 
-static DEBUG_PRINTER: OneTimeInit<DebugPrinter> = OneTimeInit::new();
+static DEBUG_PRINTER: OneTimeInit<SpinLock<DebugPrinter>> = OneTimeInit::new();
 
 impl LogLevel {
     pub fn log_prefix(self) -> &'static str {
@@ -83,9 +83,9 @@ impl fmt::Write for DebugPrinter {
 }
 
 pub fn init() {
-    DEBUG_PRINTER.init(DebugPrinter {
+    DEBUG_PRINTER.init(SpinLock::new(DebugPrinter {
         sink: PLATFORM.primary_serial().unwrap(),
-    });
+    }));
 }
 
 #[doc = "hide"]
@@ -93,7 +93,7 @@ pub fn debug_internal(args: Arguments, level: LogLevel) {
     use fmt::Write;
 
     if DEBUG_PRINTER.is_initialized() {
-        let printer = DEBUG_PRINTER.get_mut();
+        let mut printer = DEBUG_PRINTER.get().lock();
 
         printer.write_str(level.log_prefix()).ok();
         printer.write_fmt(args).ok();

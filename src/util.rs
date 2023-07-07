@@ -1,6 +1,7 @@
 use core::{
     cell::UnsafeCell,
     mem::MaybeUninit,
+    ops::{Deref, DerefMut},
     panic,
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -9,6 +10,18 @@ use core::{
 pub struct OneTimeInit<T> {
     value: UnsafeCell<MaybeUninit<T>>,
     state: AtomicBool,
+}
+
+#[repr(C)]
+pub struct SpinLock<T> {
+    value: UnsafeCell<T>,
+    state: AtomicBool,
+}
+
+#[repr(C)]
+pub struct SpinLockGuard<'a, T> {
+    value: *mut T,
+    lock: &'a SpinLock<T>,
 }
 
 unsafe impl<T> Sync for OneTimeInit<T> {}
@@ -55,18 +68,53 @@ impl<T> OneTimeInit<T> {
 
         unsafe { (*self.value.get()).assume_init_ref() }
     }
+}
 
-    // FIXME remove this and add a spinlock instead
-    #[allow(clippy::mut_from_ref)]
-    #[track_caller]
-    pub fn get_mut(&self) -> &mut T {
-        if !self.state.load(Ordering::Acquire) {
-            panic!(
-                "{:?}: Attempt to dereference an uninitialized value",
-                panic::Location::caller()
-            );
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        Self {
+            value: UnsafeCell::new(value),
+            state: AtomicBool::new(false),
+        }
+    }
+
+    pub fn lock(&self) -> SpinLockGuard<T> {
+        while let Err(_) =
+            self.state
+                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        {
+            aarch64_cpu::asm::nop();
         }
 
-        unsafe { (*self.value.get()).assume_init_mut() }
+        SpinLockGuard {
+            value: self.value.get(),
+            lock: self,
+        }
+    }
+
+    pub unsafe fn force_release(&self) {
+        self.state.store(false, Ordering::Release);
+    }
+}
+
+impl<T> Deref for SpinLockGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.value) }
+    }
+}
+
+impl<T> DerefMut for SpinLockGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *(self.value) }
+    }
+}
+
+impl<T> Drop for SpinLockGuard<'_, T> {
+    fn drop(&mut self) {
+        unsafe {
+            self.lock.force_release();
+        }
     }
 }

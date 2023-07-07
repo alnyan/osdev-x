@@ -8,6 +8,8 @@
 #![no_std]
 #![no_main]
 
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use crate::debug::{debug_internal, LogLevel};
 
 #[macro_use]
@@ -21,20 +23,29 @@ pub mod util;
 
 #[panic_handler]
 fn panic_handler(pi: &core::panic::PanicInfo) -> ! {
-    fatalln!("--- BEGIN PANIC ---");
-    fatal!("Kernel panic ");
+    static PANIC_HAPPENED: AtomicBool = AtomicBool::new(false);
 
-    if let Some(location) = pi.location() {
-        fatalln!("at {}:{}:", location.file(), location.line());
+    if PANIC_HAPPENED
+        .compare_exchange(false, true, Ordering::Release, Ordering::Acquire)
+        .is_ok()
+    {
+        fatalln!("--- BEGIN PANIC ---");
+        fatal!("Kernel panic ");
+
+        if let Some(location) = pi.location() {
+            fatalln!("at {}:{}:", location.file(), location.line());
+        } else {
+            fatalln!(":");
+        }
+
+        if let Some(msg) = pi.message() {
+            debug_internal(*msg, LogLevel::Fatal);
+            fatalln!();
+        }
+        fatalln!("---  END PANIC  ---");
+
+        loop {}
     } else {
-        fatalln!(":");
+        loop {}
     }
-
-    if let Some(msg) = pi.message() {
-        debug_internal(*msg, LogLevel::Fatal);
-        fatalln!();
-    }
-    fatalln!("---  END PANIC  ---");
-
-    loop {}
 }
