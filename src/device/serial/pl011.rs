@@ -1,3 +1,4 @@
+//! ARM PL011 driver
 use tock_registers::{interfaces::Writeable, register_structs, registers::ReadWrite};
 
 use super::SerialDevice;
@@ -10,6 +11,7 @@ use crate::{
 register_structs! {
     #[allow(non_snake_case)]
     Regs {
+        /// Transmit/receive data register
         (0x00 => DR: ReadWrite<u32>),
         (0x04 => @END),
     }
@@ -19,6 +21,7 @@ struct Pl011Inner {
     regs: DeviceMemoryIo<Regs>,
 }
 
+/// PL011 device instance
 pub struct Pl011 {
     inner: OneTimeInit<SpinLock<Pl011Inner>>,
     base: usize,
@@ -49,6 +52,7 @@ impl Device for Pl011 {
 }
 
 impl Pl011 {
+    /// Constructs an instance of the device at `base`
     pub const fn new(base: usize) -> Self {
         Self {
             inner: OneTimeInit::new(),

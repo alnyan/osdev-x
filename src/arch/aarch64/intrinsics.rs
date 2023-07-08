@@ -1,3 +1,6 @@
+//! Intrinsic helper functions for AArch64 platforms
+
+/// Returns an absolute address to the given symbol
 #[macro_export]
 macro_rules! absolute_address {
     ($sym:expr) => {{

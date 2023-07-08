@@ -1,3 +1,4 @@
+//! Utilities for debug information logging
 use core::fmt::{self, Arguments};
 
 use crate::{
@@ -6,16 +7,22 @@ use crate::{
     util::{OneTimeInit, SpinLock},
 };
 
+/// Defines the severity of the message
 #[derive(Clone, Copy)]
 pub enum LogLevel {
+    /// Debugging and verbose information
     Debug,
+    /// General information about transitions in the system state
     Info,
+    /// Non-critical abnormalities or notices
     Warning,
+    /// Failures of non-essential components
     Error,
+    /// Irrecoverable errors which result in kernel panic
     Fatal,
 }
 
-pub struct DebugPrinter {
+struct DebugPrinter {
     sink: &'static dyn SerialDevice,
 }
 
@@ -28,10 +35,12 @@ macro_rules! log_print {
 macro_rules! debug_tpl {
     ($d:tt $name:ident, $nameln:ident, $level:ident) => {
         #[allow(unused_macros)]
+        /// Prints the message to the log
         macro_rules! $name {
             ($d($d args:tt)+) => (log_print!($crate::debug::LogLevel::$level, format_args!($d($d args)+)));
         }
 
+        /// Prints the message to the log, terminated by a newline character
         #[allow(unused_macros)]
         macro_rules! $nameln {
             () => {
@@ -51,7 +60,7 @@ debug_tpl!($ fatal, fatalln, Fatal);
 static DEBUG_PRINTER: OneTimeInit<SpinLock<DebugPrinter>> = OneTimeInit::new();
 
 impl LogLevel {
-    pub fn log_prefix(self) -> &'static str {
+    fn log_prefix(self) -> &'static str {
         match self {
             LogLevel::Debug => "",
             LogLevel::Info => "\x1b[37m\x1b[1m",
@@ -61,7 +70,7 @@ impl LogLevel {
         }
     }
 
-    pub fn log_suffix(self) -> &'static str {
+    fn log_suffix(self) -> &'static str {
         match self {
             LogLevel::Debug => "",
             LogLevel::Info => "",
@@ -82,6 +91,11 @@ impl fmt::Write for DebugPrinter {
     }
 }
 
+/// Initializes the debug logging faclities.
+///
+/// # Panics
+///
+/// Will panic if called more than once.
 pub fn init() {
     DEBUG_PRINTER.init(SpinLock::new(DebugPrinter {
         sink: PLATFORM.primary_serial().unwrap(),

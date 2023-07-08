@@ -1,3 +1,4 @@
+//! Memory management utilities and types
 use crate::{
     arch::{ArchitectureImpl, PlatformImpl},
     device::{Architecture, Platform},
@@ -7,11 +8,37 @@ pub mod device;
 pub mod phys;
 pub mod table;
 
+/// Kernel's physical load address
 pub const KERNEL_PHYS_BASE: usize = PlatformImpl::KERNEL_PHYS_BASE;
+/// Kernel's virtual memory mapping offset (i.e. kernel's virtual address is [KERNEL_PHYS_BASE] +
+/// [KERNEL_VIRT_OFFSET])
 pub const KERNEL_VIRT_OFFSET: usize = ArchitectureImpl::KERNEL_VIRT_OFFSET;
 
+/// Interface for converting between address spaces.
+///
+/// # Safety
+///
+/// An incorrect implementation can produce invalid address.
 pub unsafe trait ConvertAddress {
+    /// Convert the address into a virtual one
+    ///
+    /// # Panics
+    ///
+    /// Panics if the address is already a virtual one
+    ///
+    /// # Safety
+    ///
+    /// An incorrect implementation can produce invalid address.
     unsafe fn virtualize(self) -> Self;
+    /// Convert the address into a physical one
+    ///
+    /// # Panics
+    ///
+    /// Panics if the address is already a physical one
+    ///
+    /// # Safety
+    ///
+    /// An incorrect implementation can produce invalid address.
     unsafe fn physicalize(self) -> Self;
 }
 

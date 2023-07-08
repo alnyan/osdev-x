@@ -1,3 +1,4 @@
+//! Main entry point for the AArch64 platforms
 use core::arch::asm;
 
 use aarch64_cpu::registers::{
@@ -6,13 +7,11 @@ use aarch64_cpu::registers::{
 };
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-use super::{exception, kernel_main};
+use super::kernel_main;
 use crate::{
     absolute_address,
-    arch::{aarch64::INITIAL_TABLES, ARCHITECTURE, PLATFORM},
-    debug,
-    device::{Architecture, Platform},
-    mem::{table::KERNEL_TABLES, ConvertAddress, KERNEL_PHYS_BASE, KERNEL_VIRT_OFFSET},
+    arch::aarch64::INITIAL_TABLES,
+    mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
 };
 
 const BSP_STACK_SIZE: usize = 32768;

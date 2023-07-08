@@ -1,3 +1,4 @@
+//! Synchronization utilities
 use core::{
     cell::UnsafeCell,
     mem::MaybeUninit,
@@ -6,18 +7,21 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+/// Wrapper struct to ensure a value can only be initialized once and used only after that
 #[repr(C)]
 pub struct OneTimeInit<T> {
     value: UnsafeCell<MaybeUninit<T>>,
     state: AtomicBool,
 }
 
+/// Locked struct allowing shared mutable access to the wrapped value
 #[repr(C)]
 pub struct SpinLock<T> {
     value: UnsafeCell<T>,
     state: AtomicBool,
 }
 
+/// Wrapper for a lock()ed [SpinLock] value
 #[repr(C)]
 pub struct SpinLockGuard<'a, T> {
     value: *mut T,
@@ -28,6 +32,7 @@ unsafe impl<T> Sync for OneTimeInit<T> {}
 unsafe impl<T> Send for OneTimeInit<T> {}
 
 impl<T> OneTimeInit<T> {
+    /// Wraps the value in an [OneTimeInit]
     pub const fn new() -> Self {
         Self {
             value: UnsafeCell::new(MaybeUninit::uninit()),
@@ -35,10 +40,12 @@ impl<T> OneTimeInit<T> {
         }
     }
 
+    /// Returns `true` if the value has already been initialized
     pub fn is_initialized(&self) -> bool {
         self.state.load(Ordering::Acquire)
     }
 
+    /// Sets the underlying value of the [OneTimeInit]. If already initialized, panics.
     #[track_caller]
     pub fn init(&self, value: T) {
         if self
@@ -57,6 +64,8 @@ impl<T> OneTimeInit<T> {
         }
     }
 
+    /// Returns an immutable reference to the underlying value and panics if it hasn't yet been
+    /// initialized
     #[track_caller]
     pub fn get(&self) -> &T {
         if !self.state.load(Ordering::Acquire) {
@@ -71,6 +80,7 @@ impl<T> OneTimeInit<T> {
 }
 
 impl<T> SpinLock<T> {
+    /// Wraps the value in a [SpinLock] structure
     pub const fn new(value: T) -> Self {
         Self {
             value: UnsafeCell::new(value),
@@ -78,10 +88,13 @@ impl<T> SpinLock<T> {
         }
     }
 
+    /// Blocks until no other lock is held on the object, then locks it and returns a
+    /// [SpinLockGuard]
     pub fn lock(&self) -> SpinLockGuard<T> {
-        while let Err(_) =
-            self.state
-                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        while self
+            .state
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
         {
             aarch64_cpu::asm::nop();
         }
@@ -92,6 +105,11 @@ impl<T> SpinLock<T> {
         }
     }
 
+    /// Resets the lock.
+    ///
+    /// # Safety
+    ///
+    /// Only safe to use from a [SpinLockGuard]'s [Drop] impl.
     pub unsafe fn force_release(&self) {
         self.state.store(false, Ordering::Release);
     }

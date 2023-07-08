@@ -23,6 +23,9 @@ endif
 
 all: kernel
 
+doc:
+	cargo doc
+
 clean:
 	cargo clean
 

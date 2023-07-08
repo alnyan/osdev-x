@@ -1,3 +1,4 @@
+//! osdev-x kernel crate
 #![feature(
     naked_functions,
     asm_const,
@@ -5,6 +6,7 @@
     optimize_attribute,
     const_trait_impl
 )]
+#![deny(missing_docs)]
 #![no_std]
 #![no_main]
 

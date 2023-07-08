@@ -1,8 +1,10 @@
+//! Exception and interrupt management functions
 use core::{arch::global_asm, fmt};
 
 use aarch64_cpu::registers::{ELR_EL1, FAR_EL1, VBAR_EL1};
 use tock_registers::interfaces::{Readable, Writeable};
 
+/// Struct for register values saved when taking an exception
 #[repr(C)]
 pub struct ExceptionFrame {
     r: [u64; 32],
@@ -29,6 +31,8 @@ impl fmt::Debug for ExceptionFrame {
     }
 }
 
+/// Initializes the exception/interrupt vectors. May be called repeatedly (though that makes no
+/// sense).
 pub fn init_exceptions() {
     extern "C" {
         static __aarch64_el1_vectors: u8;

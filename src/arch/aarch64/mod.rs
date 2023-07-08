@@ -1,3 +1,4 @@
+//! AArch64 architecture and platforms implementation
 use aarch64_cpu::registers::TTBR1_EL1;
 use plat_qemu::PLATFORM;
 use tables::KernelTables;
@@ -6,8 +7,8 @@ use crate::{
     absolute_address, debug,
     device::{Architecture, Platform},
     mem::{
-        phys::{self, PageUsage, PhysicalMemoryRegion},
-        ConvertAddress, KERNEL_VIRT_OFFSET,
+        phys::{self, PhysicalMemoryRegion},
+        ConvertAddress,
     },
 };
 
@@ -21,11 +22,14 @@ pub mod boot;
 pub mod exception;
 pub mod table;
 
+/// AArch64 platform interface
 pub struct AArch64;
 
+/// Contains compile-time tables for initial kernel setup
 #[link_section = ".data.tables"]
 pub static mut INITIAL_TABLES: KernelTables = KernelTables::zeroed();
 
+/// Global platform handle
 pub static ARCHITECTURE: AArch64 = AArch64;
 
 impl Architecture for AArch64 {
@@ -39,6 +43,8 @@ impl Architecture for AArch64 {
         TTBR1_EL1.set_baddr(KERNEL_TABLES.l1_physical_address() as u64);
     }
 }
+
+/// AArch64 kernel main entry point
 pub fn kernel_main(dtb_phys: usize) -> ! {
     // Setup proper debugging functions
     // NOTE it is critical that the code does not panic

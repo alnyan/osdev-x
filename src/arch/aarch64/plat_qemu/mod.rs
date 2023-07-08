@@ -1,8 +1,10 @@
+//! Qemu's "virt" platform implementation for AArch64
 use crate::device::{
     serial::{pl011::Pl011, SerialDevice},
     Device, Platform,
 };
 
+/// AArch64 "virt" platform implementation
 pub struct QemuPlatform {
     pl011: Pl011,
 }
@@ -25,6 +27,7 @@ impl Platform for QemuPlatform {
     }
 }
 
+/// AArch64 "virt" platform
 pub static PLATFORM: QemuPlatform = QemuPlatform {
     pl011: Pl011::new(0x09000000),
 };
