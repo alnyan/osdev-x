@@ -2,6 +2,7 @@
 use core::{marker::PhantomData, mem::size_of, ops::Deref};
 
 /// Generic MMIO access mapping
+#[derive(Clone)]
 #[allow(unused)]
 pub struct DeviceMemory {
     name: &'static str,
@@ -46,6 +47,21 @@ impl<T> DeviceMemoryIo<T> {
     pub unsafe fn map(name: &'static str, phys: usize) -> Self {
         Self {
             mmio: DeviceMemory::map(name, phys, size_of::<T>()),
+            _pd: PhantomData,
+        }
+    }
+
+    /// Constructs a device MMIO wrapper from given [DeviceMemory] mapping.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure `mmio` actually points to a device of type `T`.
+    pub unsafe fn new(mmio: DeviceMemory) -> Self {
+        assert!(mmio.size >= size_of::<T>());
+        // TODO check align
+
+        Self {
+            mmio,
             _pd: PhantomData,
         }
     }

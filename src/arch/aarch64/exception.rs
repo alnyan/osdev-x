@@ -4,6 +4,11 @@ use core::{arch::global_asm, fmt};
 use aarch64_cpu::registers::{ELR_EL1, FAR_EL1, VBAR_EL1};
 use tock_registers::interfaces::{Readable, Writeable};
 
+use crate::{
+    arch::PLATFORM,
+    device::{interrupt::IrqContext, Platform},
+};
+
 /// Struct for register values saved when taking an exception
 #[repr(C)]
 pub struct ExceptionFrame {
@@ -55,23 +60,20 @@ extern "C" fn __aa64_exc_sync_handler(frame: *mut ExceptionFrame) {
 
 #[no_mangle]
 extern "C" fn __aa64_exc_irq_handler(_frame: *mut ExceptionFrame) {
-    loop {
-        aarch64_cpu::asm::nop();
+    unsafe {
+        let ic = IrqContext::new();
+        PLATFORM.interrupt_controller().handle_pending_irqs(&ic);
     }
 }
 
 #[no_mangle]
 extern "C" fn __aa64_exc_fiq_handler() {
-    loop {
-        aarch64_cpu::asm::nop();
-    }
+    todo!();
 }
 
 #[no_mangle]
 extern "C" fn __aa64_exc_serror_handler() {
-    loop {
-        aarch64_cpu::asm::nop();
-    }
+    todo!();
 }
 
 global_asm!(include_str!("vectors.S"));

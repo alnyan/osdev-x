@@ -17,6 +17,7 @@ __aa\bits\()_el\el\ht\()_\kind:
     mov lr, xzr
     bl __aa64_exc_\kind\()_handler
     EXC_RESTORE_STATE
+    eret
 .endm
 
 // 32 gp regs + 3 special regs

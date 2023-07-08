@@ -20,6 +20,7 @@ pub mod plat_qemu;
 
 pub mod boot;
 pub mod exception;
+pub mod gic;
 pub mod table;
 
 /// AArch64 platform interface
@@ -70,5 +71,12 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
         );
     }
 
-    todo!()
+    unsafe {
+        PLATFORM.init();
+        intrinsics::unmask_irqs();
+    }
+
+    loop {
+        aarch64_cpu::asm::wfi();
+    }
 }

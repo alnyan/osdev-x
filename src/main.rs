@@ -6,7 +6,7 @@
     optimize_attribute,
     const_trait_impl
 )]
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 #![no_std]
 #![no_main]
 

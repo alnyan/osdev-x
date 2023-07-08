@@ -31,6 +31,9 @@ pub struct SpinLockGuard<'a, T> {
 unsafe impl<T> Sync for OneTimeInit<T> {}
 unsafe impl<T> Send for OneTimeInit<T> {}
 
+unsafe impl<T> Sync for SpinLock<T> {}
+unsafe impl<T> Send for SpinLock<T> {}
+
 impl<T> OneTimeInit<T> {
     /// Wraps the value in an [OneTimeInit]
     pub const fn new() -> Self {
