@@ -67,4 +67,6 @@ pub trait Architecture {
     ///
     /// Unsafe to call if the MMU has already been initialized.
     unsafe fn init_mmu(&self);
+
+    fn map_device_pages(&self, phys: usize, count: usize) -> usize;
 }

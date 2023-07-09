@@ -27,8 +27,8 @@ struct DebugPrinter {
 }
 
 macro_rules! log_print {
-    ($level:expr, $args:expr) => {
-        $crate::debug::debug_internal($args, $level)
+    ($level:expr, $($args:tt)+) => {
+        $crate::debug::debug_internal(format_args!($($args)+), $level)
     };
 }
 
@@ -37,7 +37,7 @@ macro_rules! debug_tpl {
         #[allow(unused_macros)]
         /// Prints the message to the log
         macro_rules! $name {
-            ($d($d args:tt)+) => (log_print!($crate::debug::LogLevel::$level, format_args!($d($d args)+)));
+            ($d($d args:tt)+) => (log_print!($crate::debug::LogLevel::$level, $d($d args)+));
         }
 
         /// Prints the message to the log, terminated by a newline character

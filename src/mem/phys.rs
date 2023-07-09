@@ -1,7 +1,11 @@
 //! Physical memory management facilities
 use core::mem::size_of;
 
-use crate::util::{OneTimeInit, SpinLock};
+use crate::{
+    absolute_address,
+    mem::KERNEL_PHYS_BASE,
+    util::{OneTimeInit, SpinLock},
+};
 
 /// Represents the way in which the page is used (or not)
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -22,8 +26,13 @@ pub struct Page {
     refcount: u32,
 }
 
+pub struct ReservedMemory {
+    items: [PhysicalMemoryRegion; 4],
+    len: usize,
+}
+
 /// Defines an usable memory region
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct PhysicalMemoryRegion {
     /// Start of the region
     pub base: usize,
@@ -35,6 +44,35 @@ pub struct PhysicalMemoryRegion {
 pub struct PhysicalMemoryManager {
     pages: &'static mut [Page],
     offset: usize,
+}
+
+impl ReservedMemory {
+    pub const fn new() -> Self {
+        Self {
+            items: [PhysicalMemoryRegion { base: 0, size: 0 }; 4],
+            len: 0,
+        }
+    }
+
+    pub fn reserve(&mut self, reason: &str, region: PhysicalMemoryRegion) {
+        infoln!(
+            "Reserve {:?} memory: {:#x}..{:#x}",
+            reason,
+            region.base,
+            region.base + region.size
+        );
+        self.items[self.len] = region;
+        self.len += 1;
+    }
+
+    pub fn is_reserved(&self, page: usize) -> bool {
+        for region in self.items.iter().take(self.len) {
+            if page >= region.base && page - region.base < region.size {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl PhysicalMemoryManager {
@@ -94,6 +132,7 @@ impl PhysicalMemoryManager {
 
 /// Global physical memory manager
 pub static PHYSICAL_MEMORY: OneTimeInit<SpinLock<PhysicalMemoryManager>> = OneTimeInit::new();
+pub static mut RESERVED_MEMORY: ReservedMemory = ReservedMemory::new();
 
 /// Allocates a single physical page from the global manager
 pub fn alloc_page(usage: PageUsage) -> usize {
@@ -122,45 +161,74 @@ fn physical_memory_range<I: Iterator<Item = PhysicalMemoryRegion>>(
     }
 }
 
-/// Sets up physical memory manager with given memory ranges, placing page tracking array at
-/// `(pages_array_base, pages_array_size)` range.
-///
-/// # Safety
-///
-/// Unsafe to call if the physical memory manager has already been initialized. The caller is
-/// responsible for making sure memory regions are valid usable memory and that the page tracking
-/// array range addresses are valid and accessible through virtual memory.
-pub unsafe fn init_with_array<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(
+fn find_contiguous_region<I: Iterator<Item = PhysicalMemoryRegion>>(
     it: I,
-    pages_array_base: usize,
-    pages_array_size: usize,
-) {
+    count: usize,
+) -> Option<usize> {
+    for region in it {
+        let mut collected = 0;
+        let mut base_addr = None;
+
+        for addr in (region.base..(region.base + region.size)).step_by(0x1000) {
+            if unsafe { RESERVED_MEMORY.is_reserved(addr) } {
+                collected = 0;
+                base_addr = None;
+                continue;
+            }
+            if base_addr.is_none() {
+                base_addr = Some(addr);
+            }
+            collected += 1;
+            if collected == count {
+                return base_addr;
+            }
+        }
+    }
+    todo!()
+}
+
+pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(it: I) {
     let (phys_start, phys_end) = physical_memory_range(it.clone()).unwrap();
-    let max_pages = pages_array_size / size_of::<Page>();
-    let total_pages = core::cmp::min((phys_end - phys_start) / 0x1000, max_pages);
+    let total_count = (phys_end - phys_start) / 0x1000;
+    let pages_array_size = total_count * size_of::<Page>();
 
-    assert!(total_pages > 0);
+    debugln!("Initializing physical memory manager");
+    debugln!("Total tracked pages: {}", total_count);
 
-    let mut phys = PhysicalMemoryManager::new(phys_start, pages_array_base, pages_array_size);
+    // Reserve memory regions from which allocation is forbidden
+    RESERVED_MEMORY.reserve("kernel", kernel_physical_memory_region());
 
-    debugln!(
-        "Page manager array in {:#x}..{:#x}",
-        pages_array_base,
-        pages_array_base + pages_array_size
-    );
+    let pages_array_base =
+        find_contiguous_region(it.clone(), (pages_array_size + 0xFFF) / 0x1000).unwrap();
+    debugln!("Placing page tracking at {:#x}", pages_array_base);
 
-    // TODO reserve kernel/initrd/DTB pages
+    let mut manager = PhysicalMemoryManager::new(phys_start, pages_array_base, pages_array_size);
+    let mut page_count = 0;
 
-    let mut available_pages = 0;
-    for reg in it {
-        debugln!("Available: {:#x}..{:#x}", reg.base, reg.base + reg.size);
-        for page in (0..reg.size).step_by(0x1000) {
-            phys.add_available_page(reg.base + page);
-            available_pages += 1;
+    for region in it {
+        for page in (region.base..(region.base + region.size)).step_by(0x1000) {
+            if RESERVED_MEMORY.is_reserved(page) {
+                continue;
+            }
+
+            manager.add_available_page(page);
+            page_count += 1;
         }
     }
 
-    debugln!("{} pages available", available_pages);
+    infoln!("{} available pages", page_count);
 
-    PHYSICAL_MEMORY.init(SpinLock::new(phys));
+    PHYSICAL_MEMORY.init(SpinLock::new(manager));
+}
+
+fn kernel_physical_memory_region() -> PhysicalMemoryRegion {
+    extern "C" {
+        static __kernel_size: u8;
+    }
+    let size = absolute_address!(__kernel_size);
+
+    PhysicalMemoryRegion {
+        base: KERNEL_PHYS_BASE,
+        size,
+    }
 }

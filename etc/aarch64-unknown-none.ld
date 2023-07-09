@@ -17,8 +17,6 @@ SECTIONS {
     . = ALIGN(16);
     . = . + KERNEL_VIRT_OFFSET;
 
-    PROVIDE(__kernel_start = .);
-
     .text : AT(. - KERNEL_VIRT_OFFSET) {
         *(.text*)
     }
@@ -40,10 +38,9 @@ SECTIONS {
     .bss : AT(. - KERNEL_VIRT_OFFSET) {
         *(COMMON)
         *(.bss*)
-        . = ALIGN(4K);
     }
+    . = ALIGN(4K);
     PROVIDE(__bss_end_phys = . - KERNEL_VIRT_OFFSET);
 
-    PROVIDE(__kernel_end = .);
-    PROVIDE(__kernel_end_phys = . - KERNEL_VIRT_OFFSET);
+    PROVIDE(__kernel_size = . - KERNEL_VIRT_OFFSET - KERNEL_PHYS_BASE);
 };

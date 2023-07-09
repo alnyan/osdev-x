@@ -5,7 +5,6 @@ use core::{
 };
 
 use bitflags::bitflags;
-use tables::KernelTables;
 
 use crate::mem::{
     table::{EntryLevel, NextPageTable},
@@ -24,23 +23,6 @@ pub struct AddressSpace {
 #[repr(C, align(0x1000))]
 pub struct PageTable<L: EntryLevel> {
     data: [PageEntry<L>; 512],
-}
-
-/// Fixed struct for kernel-space address mapping (kernel/device/page tracking array mapping)
-pub struct FixedTables {
-    l1: PageTable<L1>,
-    l2: PageTable<L2>,
-    kernel_l3: PageTable<L3>,
-    device_l3: PageTable<L3>,
-
-    l1i: usize,
-
-    kernel_l2i: usize,
-
-    device_l2i: usize,
-    device_l3i: usize,
-
-    pages_l2i: usize,
 }
 
 /// Translation level 1: Entry is 1GiB page/table
@@ -108,6 +90,15 @@ impl const EntryLevel for L3 {
 #[repr(transparent)]
 pub struct PageEntry<L>(u64, PhantomData<L>);
 
+pub struct FixedTables {
+    l1: PageTable<L1>,
+    device_l2: PageTable<L2>,
+    device_l3: PageTable<L3>,
+
+    device_l2i: usize,
+    device_l3i: usize,
+}
+
 impl PageEntry<L3> {
     /// Creates a 4KiB page mapping
     pub fn page(phys: usize, attrs: PageAttributes) -> Self {
@@ -144,6 +135,18 @@ impl PageEntry<L2> {
 }
 
 impl PageEntry<L1> {
+    pub fn block(phys: usize, attrs: PageAttributes) -> Self {
+        Self(
+            (phys as u64)
+                | (PageAttributes::BLOCK
+                    | PageAttributes::PRESENT
+                    | PageAttributes::ACCESS
+                    | attrs)
+                    .bits(),
+            PhantomData,
+        )
+    }
+
     /// Creates a mapping pointing to the next-level translation table
     pub fn table(phys: usize, attrs: PageAttributes) -> Self {
         Self(
@@ -202,7 +205,13 @@ impl<L: EntryLevel> PageTable<L> {
 
     /// Returns a physical address pointing to this page table
     pub fn physical_address(&self) -> usize {
-        unsafe { (self.data.as_ptr() as usize).physicalize() }
+        // &self may already by a physical address
+        let addr = self.data.as_ptr() as usize;
+        if addr < KERNEL_VIRT_OFFSET {
+            addr
+        } else {
+            unsafe { addr.physicalize() }
+        }
     }
 }
 
@@ -221,84 +230,53 @@ impl<L: EntryLevel> IndexMut<usize> for PageTable<L> {
 }
 
 impl FixedTables {
-    /// Constructs a fixed table struct with all tables set to invalid values
     pub const fn zeroed() -> Self {
         Self {
             l1: PageTable::zeroed(),
-            l2: PageTable::zeroed(),
-            kernel_l3: PageTable::zeroed(),
+            device_l2: PageTable::zeroed(),
             device_l3: PageTable::zeroed(),
 
-            l1i: L1::index(KERNEL_PHYS_BASE),
-
-            kernel_l2i: L2::index(KERNEL_PHYS_BASE),
-
-            device_l2i: L2::index(KERNEL_PHYS_BASE) + 1,
+            device_l2i: 1, // First entry is reserved for 4K table
             device_l3i: 0,
-
-            pages_l2i: L2::index(KERNEL_PHYS_BASE) + 2,
         }
     }
 
-    /// Initializes the kernel fixed tables from `src_tables` and sets up the necessary mappings
-    /// for device/page array management.
-    ///
-    /// # Safety
-    ///
-    /// The caller is responsible for making sure the function has not yet been called and that
-    /// `src_tables` points to a correct virtual address of the compile-time translation tables.
-    pub unsafe fn init(&mut self, src_tables: *const KernelTables) {
-        // Copy kernel mapping entries from the initial L3 table
-        for i in 0..512 {
-            KERNEL_TABLES.kernel_l3[i] = PageEntry::from_raw((*src_tables).l3.data[i]);
+    pub fn map_device_pages(&mut self, phys: usize, count: usize) -> usize {
+        if count > 512 {
+            panic!("Unsupported device memory mapping size");
+        } else if count > 1 {
+            // 2MiB mappings
+            todo!();
+        } else {
+            // 4KiB mappings
+            if self.device_l3i == 512 {
+                panic!("Out of device memory");
+            }
+
+            let virt = DEVICE_VIRT_OFFSET + (self.device_l3i << 12);
+            self.device_l3[self.device_l3i] = PageEntry::page(phys, PageAttributes::empty());
+            self.device_l3i += 1;
+
+            virt
         }
-
-        // Map L1 -> L2 -> L3 for kernel
-        KERNEL_TABLES.l1[self.l1i] =
-            PageEntry::<L1>::table(KERNEL_TABLES.l2.physical_address(), PageAttributes::empty());
-        KERNEL_TABLES.l2[self.kernel_l2i] = PageEntry::<L2>::table(
-            KERNEL_TABLES.kernel_l3.physical_address(),
-            PageAttributes::empty(),
-        );
-        KERNEL_TABLES.l2[self.device_l2i] = PageEntry::<L2>::table(
-            KERNEL_TABLES.device_l3.physical_address(),
-            PageAttributes::empty(),
-        );
-
-        // Map physical page array
-        let page_array_phys = (self.l1i << 30) | (self.pages_l2i << 21);
-        KERNEL_TABLES.l2[self.pages_l2i] =
-            PageEntry::<L2>::block(page_array_phys, PageAttributes::empty());
-    }
-
-    /// Returns the physical address of the upmost translation table
-    pub fn l1_physical_address(&self) -> usize {
-        self.l1.physical_address()
-    }
-
-    /// Returns the range to which the page tracking array is mapped
-    pub fn page_array_range(&self) -> (usize, usize) {
-        ((self.l1i << 30) | (self.pages_l2i << 21), 1 << 21)
-    }
-
-    /// Maps a single 4KiB page for device MMIO.
-    ///
-    /// # Safety
-    ///
-    /// The caller is responsible for making sure the `phys` address is valid and is not aliased.
-    pub unsafe fn map_device_4k(&mut self, phys: usize) -> usize {
-        if self.device_l3i == 512 {
-            panic!("Ran out of device mapping memory");
-        }
-
-        let virt = (1 << 30) | (1 << 21) | (self.device_l3i << 12) | KERNEL_VIRT_OFFSET;
-        self.device_l3[self.device_l3i] = PageEntry::page(phys, PageAttributes::empty());
-
-        self.device_l3i += 1;
-
-        virt
     }
 }
 
-/// Global kernel virtual memory tables
+pub unsafe fn init_fixed_tables() {
+    // Map first 256GiB
+    for i in 0..256 {
+        KERNEL_TABLES.l1[i] = PageEntry::<L1>::block(i << 30, PageAttributes::empty());
+    }
+
+    KERNEL_TABLES.l1[256] = PageEntry::<L1>::table(
+        KERNEL_TABLES.device_l2.physical_address(),
+        PageAttributes::empty(),
+    );
+    KERNEL_TABLES.device_l2[0] = PageEntry::<L2>::table(
+        KERNEL_TABLES.device_l3.physical_address(),
+        PageAttributes::empty(),
+    );
+}
+
+pub const DEVICE_VIRT_OFFSET: usize = KERNEL_VIRT_OFFSET + (256 << 30);
 pub static mut KERNEL_TABLES: FixedTables = FixedTables::zeroed();

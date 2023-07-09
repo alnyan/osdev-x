@@ -1,6 +1,8 @@
 //! Facilities for mapping devices to virtual address space
 use core::{marker::PhantomData, mem::size_of, ops::Deref};
 
+use crate::{arch::ARCHITECTURE, device::Architecture};
+
 /// Generic MMIO access mapping
 #[derive(Clone)]
 #[allow(unused)]
@@ -29,8 +31,7 @@ impl DeviceMemory {
             todo!("Device memory mappings larger than 4K");
         }
 
-        use crate::arch::aarch64::table::KERNEL_TABLES;
-        let base = KERNEL_TABLES.map_device_4k(phys);
+        let base = ARCHITECTURE.map_device_pages(phys, 1);
 
         Self { name, base, size }
     }

@@ -32,14 +32,8 @@ clean:
 clippy:
 	cargo clippy $(CARGO_BUILD_ARGS)
 
-kernel-raw:
+kernel:
 	cargo build $(CARGO_BUILD_ARGS)
-
-gentables:
-	cargo build -p gentables
-
-kernel: kernel-raw gentables
-	target/debug/gentables $(O)/osdev-x
 
 kernel-bin: kernel
 	llvm-objcopy -O binary $(O)/osdev-x $(O)/kernel.bin

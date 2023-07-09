@@ -7,10 +7,14 @@ use aarch64_cpu::registers::{
 };
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-use super::kernel_main;
+use super::{
+    kernel_main,
+    table::{init_fixed_tables, KERNEL_TABLES},
+    ARCHITECTURE,
+};
 use crate::{
     absolute_address,
-    arch::aarch64::INITIAL_TABLES,
+    device::Architecture,
     mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
 };
 
@@ -21,27 +25,7 @@ struct KernelStack {
     data: [u8; BSP_STACK_SIZE],
 }
 
-fn mmu_init(tables_phys: u64) {
-    if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::TGran4::Supported) {
-        todo!();
-    }
-
-    TCR_EL1.modify(
-        // General
-        TCR_EL1::IPS::Bits_48 +
-        // TTBR0
-        TCR_EL1::TG0::KiB_4 + TCR_EL1::T0SZ.val(25) + TCR_EL1::SH0::Inner +
-        // TTBR1
-        TCR_EL1::TG1::KiB_4 + TCR_EL1::T1SZ.val(25) + TCR_EL1::SH1::Outer,
-    );
-
-    TTBR0_EL1.set_baddr(tables_phys);
-    TTBR1_EL1.set_baddr(tables_phys);
-
-    SCTLR_EL1.modify(SCTLR_EL1::M::Enable);
-}
-
-extern "C" fn __aarch64_lower_entry(dtb_phys: usize, tables_phys: u64) -> ! {
+extern "C" fn __aarch64_lower_entry(dtb_phys: usize) -> ! {
     // Unmask FP operations
     CPACR_EL1.modify(CPACR_EL1::FPEN::TrapNothing);
 
@@ -49,7 +33,9 @@ extern "C" fn __aarch64_lower_entry(dtb_phys: usize, tables_phys: u64) -> ! {
         panic!("Only EL1 is supported for now");
     }
 
-    mmu_init(tables_phys);
+    unsafe {
+        ARCHITECTURE.init_mmu();
+    }
 
     let sp = unsafe { BSP_STACK.data.as_ptr().add(BSP_STACK_SIZE).virtualize() };
     let elr = absolute_address!(__aarch64_upper_entry);
@@ -76,11 +62,9 @@ unsafe extern "C" fn __aarch64_entry() -> ! {
         ldr x1, ={stack_bottom} + {stack_size} - {kernel_virt_offset}
         mov sp, x1
 
-        adr x1, {kernel_tables}
         bl {kernel_lower_entry} - {kernel_virt_offset}
 "#,
         kernel_lower_entry = sym __aarch64_lower_entry,
-        kernel_tables = sym INITIAL_TABLES,
         stack_bottom = sym BSP_STACK,
         stack_size = const BSP_STACK_SIZE,
         kernel_virt_offset = const KERNEL_VIRT_OFFSET,

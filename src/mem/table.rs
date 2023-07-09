@@ -1,7 +1,5 @@
 //! Virtual memory table interface
-pub use crate::arch::aarch64::table::{
-    AddressSpace, FixedTables, PageAttributes, PageEntry, PageTable, KERNEL_TABLES,
-};
+pub use crate::arch::aarch64::table::{AddressSpace, PageAttributes, PageEntry, PageTable};
 
 /// Interface for non-terminal tables to retrieve the next level of address translation tables
 pub trait NextPageTable {
