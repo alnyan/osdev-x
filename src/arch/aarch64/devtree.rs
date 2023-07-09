@@ -1,5 +1,6 @@
+//! ARM device tree utlities
 use fdt_rs::{
-    base::{DevTree, DevTreeNode},
+    base::DevTree,
     index::{iters::DevTreeIndexNodeSiblingIter, DevTreeIndex, DevTreeIndexNode, DevTreeIndexProp},
     prelude::PropReader,
 };
@@ -17,40 +18,53 @@ impl FdtIndexBuffer {
     }
 }
 
+/// Device tree node
 pub type TNode<'a> = DevTreeIndexNode<'a, 'a, 'a>;
+/// Device tree property
 pub type TProp<'a> = DevTreeIndexProp<'a, 'a, 'a>;
 
+/// Iterator for physical memory regions present in the device tree
 #[derive(Clone)]
 pub struct FdtMemoryRegionIter<'a> {
     inner: DevTreeIndexNodeSiblingIter<'a, 'a, 'a>,
 }
 
+/// Device tree wrapper struct
 pub struct DeviceTree<'a> {
     tree: DevTree<'a>,
     index: DevTreeIndex<'a, 'a>,
 }
 
 impl<'a> DeviceTree<'a> {
+    /// Constructs a device tree wrapper from the DTB virtual address.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the validity of the address.
     pub unsafe fn from_addr(virt: usize) -> Self {
         let tree = DevTree::from_raw_pointer(virt as _).unwrap();
         let index = DevTreeIndex::new(tree, &mut FDT_INDEX_BUFFER.0).unwrap();
         Self { tree, index }
     }
 
+    /// Looks up a node for a given path
     pub fn node_by_path(&self, path: &str) -> Option<TNode> {
         find_node(self.index.root(), path.trim_start_matches('/'))
     }
 
+    /// Prints the device tree to log output
     pub fn dump(&self, level: LogLevel) {
         dump_node(&self.index.root(), 0, level)
     }
 
+    /// Returns the total size of the device tree in memory
     pub fn size(&self) -> usize {
         self.tree.totalsize()
     }
 }
 
 impl<'a> FdtMemoryRegionIter<'a> {
+    /// Constructs a memory region iterator for given device tree
     pub fn new(dt: &'a DeviceTree) -> Self {
         let inner = dt.index.root().children();
         Self { inner }
@@ -81,6 +95,7 @@ impl Iterator for FdtMemoryRegionIter<'_> {
     }
 }
 
+/// Looks up a property with given name in the node
 pub fn find_prop<'a>(node: &TNode<'a>, name: &str) -> Option<TProp<'a>> {
     node.props().find(|p| p.name().unwrap_or("") == name)
 }

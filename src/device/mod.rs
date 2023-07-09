@@ -68,5 +68,6 @@ pub trait Architecture {
     /// Unsafe to call if the MMU has already been initialized.
     unsafe fn init_mmu(&self);
 
+    /// Allocates a virtual mapping for the specified physical memory region
     fn map_device_pages(&self, phys: usize, count: usize) -> usize;
 }

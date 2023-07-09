@@ -1,18 +1,11 @@
 //! Qemu's "virt" platform implementation for AArch64
-use crate::{
-    debug::LogLevel,
-    device::{
-        interrupt::{InterruptController, InterruptSource},
-        serial::{pl011::Pl011, SerialDevice},
-        Device, Platform,
-    },
+use crate::device::{
+    interrupt::{InterruptController, InterruptSource},
+    serial::{pl011::Pl011, SerialDevice},
+    Device, Platform,
 };
 
-use super::{
-    devtree::FdtMemoryRegionIter,
-    gic::{Gic, IrqNumber},
-    ARCHITECTURE,
-};
+use super::gic::{Gic, IrqNumber};
 
 /// AArch64 "virt" platform implementation
 pub struct QemuPlatform {

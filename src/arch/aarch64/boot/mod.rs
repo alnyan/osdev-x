@@ -1,17 +1,10 @@
 //! Main entry point for the AArch64 platforms
 use core::arch::asm;
 
-use aarch64_cpu::registers::{
-    CurrentEL, CPACR_EL1, ELR_EL1, ID_AA64MMFR0_EL1, SCTLR_EL1, SPSR_EL1, SP_EL0, TCR_EL1,
-    TTBR0_EL1, TTBR1_EL1,
-};
+use aarch64_cpu::registers::{CurrentEL, CPACR_EL1, ELR_EL1, SPSR_EL1, SP_EL0};
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-use super::{
-    kernel_main,
-    table::{init_fixed_tables, KERNEL_TABLES},
-    ARCHITECTURE,
-};
+use super::{kernel_main, ARCHITECTURE};
 use crate::{
     absolute_address,
     device::Architecture,

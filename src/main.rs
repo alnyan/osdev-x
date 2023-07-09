@@ -4,7 +4,8 @@
     asm_const,
     panic_info_message,
     optimize_attribute,
-    const_trait_impl
+    const_trait_impl,
+    maybe_uninit_slice
 )]
 #![warn(missing_docs)]
 #![no_std]

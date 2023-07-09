@@ -8,7 +8,7 @@ use bitflags::bitflags;
 
 use crate::mem::{
     table::{EntryLevel, NextPageTable},
-    ConvertAddress, KERNEL_PHYS_BASE, KERNEL_VIRT_OFFSET,
+    ConvertAddress, KERNEL_VIRT_OFFSET,
 };
 
 /// TODO
@@ -90,12 +90,12 @@ impl const EntryLevel for L3 {
 #[repr(transparent)]
 pub struct PageEntry<L>(u64, PhantomData<L>);
 
+/// Fixed-layout kernel-space address mapping tables
 pub struct FixedTables {
     l1: PageTable<L1>,
     device_l2: PageTable<L2>,
     device_l3: PageTable<L3>,
 
-    device_l2i: usize,
     device_l3i: usize,
 }
 
@@ -135,6 +135,7 @@ impl PageEntry<L2> {
 }
 
 impl PageEntry<L1> {
+    /// Creates a 1GiB page mapping
     pub fn block(phys: usize, attrs: PageAttributes) -> Self {
         Self(
             (phys as u64)
@@ -230,17 +231,18 @@ impl<L: EntryLevel> IndexMut<usize> for PageTable<L> {
 }
 
 impl FixedTables {
+    /// Constructs an empty table group
     pub const fn zeroed() -> Self {
         Self {
             l1: PageTable::zeroed(),
             device_l2: PageTable::zeroed(),
             device_l3: PageTable::zeroed(),
 
-            device_l2i: 1, // First entry is reserved for 4K table
             device_l3i: 0,
         }
     }
 
+    /// Maps a physical memory region as device memory and returns its allocated base address
     pub fn map_device_pages(&mut self, phys: usize, count: usize) -> usize {
         if count > 512 {
             panic!("Unsupported device memory mapping size");
@@ -262,6 +264,11 @@ impl FixedTables {
     }
 }
 
+/// Initializes mappings for the kernel and device memory tables.
+///
+/// # Safety
+///
+/// Only allowed to be called once during lower-half part of the initialization process.
 pub unsafe fn init_fixed_tables() {
     // Map first 256GiB
     for i in 0..256 {
@@ -278,5 +285,7 @@ pub unsafe fn init_fixed_tables() {
     );
 }
 
+/// Offset applied to device virtual memory mappings
 pub const DEVICE_VIRT_OFFSET: usize = KERNEL_VIRT_OFFSET + (256 << 30);
+/// Global kernel address space translation tables
 pub static mut KERNEL_TABLES: FixedTables = FixedTables::zeroed();

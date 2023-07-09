@@ -9,7 +9,7 @@ use crate::{
     debug,
     device::{Architecture, Platform},
     mem::{
-        phys::{self, PhysicalMemoryRegion, RESERVED_MEMORY},
+        phys::{self, reserved::reserve_region, PhysicalMemoryRegion},
         ConvertAddress,
     },
     util::OneTimeInit,
@@ -70,11 +70,21 @@ impl Architecture for AArch64 {
 }
 
 impl AArch64 {
+    /// Initializes the architecture's device tree
+    ///
+    /// # Safety
+    ///
+    /// Only makes sense to call during the early initialization, once.
     pub unsafe fn init_device_tree(&self, dtb_phys: usize) {
         let dt = DeviceTree::from_addr(dtb_phys.virtualize());
         self.dt.init(dt);
     }
 
+    /// Returns the device tree
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the device tree has not yet been initialized
     pub fn device_tree(&self) -> &DeviceTree {
         self.dt.get()
     }
@@ -82,7 +92,7 @@ impl AArch64 {
     unsafe fn init_physical_memory(&self, dtb_phys: usize) {
         let dt = self.device_tree();
 
-        RESERVED_MEMORY.reserve(
+        reserve_region(
             "dtb",
             PhysicalMemoryRegion {
                 base: dtb_phys,

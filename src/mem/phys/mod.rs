@@ -1,11 +1,16 @@
 //! Physical memory management facilities
-use core::mem::size_of;
+use core::{iter::StepBy, mem::size_of, ops::Range};
 
 use crate::{
     absolute_address,
-    mem::KERNEL_PHYS_BASE,
+    mem::{
+        phys::reserved::{is_reserved, reserve_region},
+        KERNEL_PHYS_BASE,
+    },
     util::{OneTimeInit, SpinLock},
 };
+
+pub mod reserved;
 
 /// Represents the way in which the page is used (or not)
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -26,11 +31,6 @@ pub struct Page {
     refcount: u32,
 }
 
-pub struct ReservedMemory {
-    items: [PhysicalMemoryRegion; 4],
-    len: usize,
-}
-
 /// Defines an usable memory region
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicalMemoryRegion {
@@ -46,32 +46,20 @@ pub struct PhysicalMemoryManager {
     offset: usize,
 }
 
-impl ReservedMemory {
-    pub const fn new() -> Self {
-        Self {
-            items: [PhysicalMemoryRegion { base: 0, size: 0 }; 4],
-            len: 0,
-        }
+impl PhysicalMemoryRegion {
+    /// Returns the end address of the region
+    pub const fn end(&self) -> usize {
+        self.base + self.size
     }
 
-    pub fn reserve(&mut self, reason: &str, region: PhysicalMemoryRegion) {
-        infoln!(
-            "Reserve {:?} memory: {:#x}..{:#x}",
-            reason,
-            region.base,
-            region.base + region.size
-        );
-        self.items[self.len] = region;
-        self.len += 1;
+    /// Returns an address range covered by the region
+    pub const fn range(&self) -> Range<usize> {
+        self.base..self.end()
     }
 
-    pub fn is_reserved(&self, page: usize) -> bool {
-        for region in self.items.iter().take(self.len) {
-            if page >= region.base && page - region.base < region.size {
-                return true;
-            }
-        }
-        false
+    /// Provides an iterator over the pages in the region
+    pub const fn pages(&self) -> StepBy<Range<usize>> {
+        self.range().step_by(0x1000)
     }
 }
 
@@ -132,7 +120,6 @@ impl PhysicalMemoryManager {
 
 /// Global physical memory manager
 pub static PHYSICAL_MEMORY: OneTimeInit<SpinLock<PhysicalMemoryManager>> = OneTimeInit::new();
-pub static mut RESERVED_MEMORY: ReservedMemory = ReservedMemory::new();
 
 /// Allocates a single physical page from the global manager
 pub fn alloc_page(usage: PageUsage) -> usize {
@@ -169,8 +156,8 @@ fn find_contiguous_region<I: Iterator<Item = PhysicalMemoryRegion>>(
         let mut collected = 0;
         let mut base_addr = None;
 
-        for addr in (region.base..(region.base + region.size)).step_by(0x1000) {
-            if unsafe { RESERVED_MEMORY.is_reserved(addr) } {
+        for addr in region.pages() {
+            if is_reserved(addr) {
                 collected = 0;
                 base_addr = None;
                 continue;
@@ -187,6 +174,15 @@ fn find_contiguous_region<I: Iterator<Item = PhysicalMemoryRegion>>(
     todo!()
 }
 
+/// Initializes physical memory manager from given available memory region iterator.
+///
+/// 1. Finds a non-reserved range to place the page tracking array.
+/// 2. Adds all non-reserved pages to the manager.
+///
+/// # Safety
+///
+/// The caller must ensure this function has not been called before and that the regions
+/// are valid and actually available.
 pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(it: I) {
     let (phys_start, phys_end) = physical_memory_range(it.clone()).unwrap();
     let total_count = (phys_end - phys_start) / 0x1000;
@@ -196,7 +192,7 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
     debugln!("Total tracked pages: {}", total_count);
 
     // Reserve memory regions from which allocation is forbidden
-    RESERVED_MEMORY.reserve("kernel", kernel_physical_memory_region());
+    reserve_region("kernel", kernel_physical_memory_region());
 
     let pages_array_base =
         find_contiguous_region(it.clone(), (pages_array_size + 0xFFF) / 0x1000).unwrap();
@@ -206,8 +202,8 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
     let mut page_count = 0;
 
     for region in it {
-        for page in (region.base..(region.base + region.size)).step_by(0x1000) {
-            if RESERVED_MEMORY.is_reserved(page) {
+        for page in region.pages() {
+            if is_reserved(page) {
                 continue;
             }
 

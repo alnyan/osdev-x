@@ -7,6 +7,12 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+/// Statically-allocated "dynamic" vector
+pub struct StaticVector<T, const N: usize> {
+    data: [MaybeUninit<T>; N],
+    len: usize,
+}
+
 /// Wrapper struct to ensure a value can only be initialized once and used only after that
 #[repr(C)]
 pub struct OneTimeInit<T> {
@@ -137,5 +143,50 @@ impl<T> Drop for SpinLockGuard<'_, T> {
         unsafe {
             self.lock.force_release();
         }
+    }
+}
+
+impl<T, const N: usize> StaticVector<T, N> {
+    /// Constructs an empty instance of [StaticVector]
+    pub const fn new() -> Self
+    where
+        T: Copy,
+    {
+        Self {
+            data: [MaybeUninit::uninit(); N],
+            len: 0,
+        }
+    }
+
+    /// Appends an item to the vector.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the vector is full.
+    pub fn push(&mut self, value: T) {
+        if self.len == N {
+            panic!("Static vector overflow: reached limit of {}", N);
+        }
+
+        self.data[self.len].write(value);
+        self.len += 1;
+    }
+
+    /// Returns the number of items present in the vector
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Returns `true` if the vector is empty
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+impl<T, const N: usize> Deref for StaticVector<T, N> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { MaybeUninit::slice_assume_init_ref(&self.data[..self.len]) }
     }
 }
