@@ -50,8 +50,6 @@ __aa\bits\()_el\el\ht\()_\kind:
 .endm
 
 .macro EXC_RESTORE_STATE
-    sub sp, sp, #PT_REGS_SIZE
-
     ldp x0, x1, [sp, #16 * 0]
     ldp x2, x3, [sp, #16 * 1]
     ldp x4, x5, [sp, #16 * 2]
@@ -69,6 +67,8 @@ __aa\bits\()_el\el\ht\()_\kind:
     ldp x26, x27, [sp, #16 * 13]
     ldp x28, x29, [sp, #16 * 14]
     ldp x30, x31, [sp, #16 * 15]
+
+    add sp, sp, #PT_REGS_SIZE
 .endm
 
 .section .text

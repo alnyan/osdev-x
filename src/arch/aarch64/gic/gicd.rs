@@ -5,7 +5,7 @@ use tock_registers::{
     registers::{ReadOnly, ReadWrite},
 };
 
-use crate::{mem::device::DeviceMemoryIo, util::SpinLock};
+use crate::{mem::device::DeviceMemoryIo, util::IrqSafeSpinLock};
 
 use super::IrqNumber;
 
@@ -54,7 +54,7 @@ register_structs! {
 }
 
 pub(super) struct Gicd {
-    shared_regs: SpinLock<DeviceMemoryIo<GicdSharedRegs>>,
+    shared_regs: IrqSafeSpinLock<DeviceMemoryIo<GicdSharedRegs>>,
     banked_regs: DeviceMemoryIo<GicdBankedRegs>,
 }
 
@@ -77,7 +77,7 @@ impl Gicd {
         shared_regs: DeviceMemoryIo<GicdSharedRegs>,
         banked_regs: DeviceMemoryIo<GicdBankedRegs>,
     ) -> Self {
-        let shared_regs = SpinLock::new(shared_regs);
+        let shared_regs = IrqSafeSpinLock::new(shared_regs);
         Self {
             shared_regs,
             banked_regs,

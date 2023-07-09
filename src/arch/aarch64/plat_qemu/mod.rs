@@ -1,16 +1,23 @@
 //! Qemu's "virt" platform implementation for AArch64
+use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0};
+use tock_registers::interfaces::Writeable;
+
 use crate::device::{
     interrupt::{InterruptController, InterruptSource},
     serial::{pl011::Pl011, SerialDevice},
     Device, Platform,
 };
 
-use super::gic::{Gic, IrqNumber};
+use super::{
+    gic::{Gic, IrqNumber},
+    timer::ArmTimer,
+};
 
 /// AArch64 "virt" platform implementation
 pub struct QemuPlatform {
-    pl011: Pl011,
     gic: Gic,
+    pl011: Pl011,
+    local_timer: ArmTimer,
 }
 
 impl Platform for QemuPlatform {
@@ -18,10 +25,22 @@ impl Platform for QemuPlatform {
 
     const KERNEL_PHYS_BASE: usize = 0x40080000;
 
-    unsafe fn init(&'static self) {
-        self.gic.init();
+    unsafe fn init(&'static self, is_bsp: bool) {
+        if is_bsp {
+            self.gic.init();
 
-        self.pl011.init_irq();
+            self.pl011.init_irq();
+
+            self.local_timer.init();
+            self.local_timer.init_irq();
+        } else {
+            self.gic.init_smp_ap();
+
+            // TODO somehow merge this with the rest of the code
+            CNTP_CTL_EL0.write(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
+            CNTP_TVAL_EL0.set(10000000);
+            self.gic.enable_irq(IrqNumber::new(30));
+        }
     }
 
     unsafe fn init_primary_serial(&self) {
@@ -46,5 +65,6 @@ pub static PLATFORM: QemuPlatform = unsafe {
     QemuPlatform {
         pl011: Pl011::new(0x09000000, IrqNumber::new(33)),
         gic: Gic::new(0x08000000, 0x08010000),
+        local_timer: ArmTimer::new(IrqNumber::new(30)),
     }
 };

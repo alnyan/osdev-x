@@ -30,6 +30,7 @@ pub mod exception;
 pub mod gic;
 pub mod smp;
 pub mod table;
+pub mod timer;
 
 pub(self) const BOOT_STACK_SIZE: usize = 32768;
 
@@ -136,7 +137,7 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
     debugln!("Initializing {} platform", PLATFORM.name());
     unsafe {
         ARCHITECTURE.init_physical_memory(dtb_phys);
-        PLATFORM.init();
+        PLATFORM.init(true);
 
         let dt = ARCHITECTURE.dt.get();
         smp::start_ap_cores(dt);

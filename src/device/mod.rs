@@ -30,7 +30,7 @@ pub trait Platform {
     /// # Safety
     ///
     /// Unsafe to call if the platform has already been initialized.
-    unsafe fn init(&'static self);
+    unsafe fn init(&'static self, is_bsp: bool);
     /// Initializes the primary serial device to provide the debugging output as early as possible.
     ///
     /// # Safety

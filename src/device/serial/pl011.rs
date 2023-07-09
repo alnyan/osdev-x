@@ -10,7 +10,7 @@ use crate::{
     arch::{aarch64::gic::IrqNumber, PLATFORM},
     device::{interrupt::InterruptSource, Device, Platform},
     mem::device::DeviceMemoryIo,
-    util::{OneTimeInit, SpinLock},
+    util::{IrqSafeSpinLock, OneTimeInit},
 };
 
 register_bitfields! {
@@ -57,7 +57,7 @@ struct Pl011Inner {
 
 /// PL011 device instance
 pub struct Pl011 {
-    inner: OneTimeInit<SpinLock<Pl011Inner>>,
+    inner: OneTimeInit<IrqSafeSpinLock<Pl011Inner>>,
     base: usize,
     irq: IrqNumber,
 }
@@ -109,7 +109,7 @@ impl Device for Pl011 {
         };
         inner.init();
 
-        self.inner.init(SpinLock::new(inner));
+        self.inner.init(IrqSafeSpinLock::new(inner));
     }
 
     fn name(&self) -> &'static str {

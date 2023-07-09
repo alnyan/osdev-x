@@ -4,10 +4,17 @@ use core::{arch::asm, sync::atomic::Ordering};
 use aarch64_cpu::registers::{CurrentEL, CPACR_EL1, ELR_EL1, SPSR_EL1, SP_EL0};
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-use super::{kernel_main, smp::CPU_COUNT, KernelStack, ARCHITECTURE, BOOT_STACK_SIZE};
+use super::{
+    exception,
+    intrinsics::{mask_irqs, unmask_irqs},
+    kernel_main,
+    smp::CPU_COUNT,
+    KernelStack, ARCHITECTURE, BOOT_STACK_SIZE,
+};
 use crate::{
     absolute_address,
-    device::Architecture,
+    arch::PLATFORM,
+    device::{Architecture, Platform},
     mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
 };
 
@@ -59,13 +66,24 @@ extern "C" fn __aarch64_bsp_upper_entry(dtb_phys: usize) -> ! {
 }
 
 extern "C" fn __aarch64_ap_upper_entry(_x0: usize) -> ! {
+    mask_irqs();
+
     // Signal to BSP that we're up
     CPU_COUNT.fetch_add(1, Ordering::SeqCst);
     aarch64_cpu::asm::sev();
 
+    exception::init_exceptions();
+
+    // Initialize CPU-local GIC and timer
+    unsafe {
+        PLATFORM.init(false);
+
+        unmask_irqs();
+    }
+
     // Just wait for now
     loop {
-        aarch64_cpu::asm::nop();
+        aarch64_cpu::asm::wfi();
     }
 }
 

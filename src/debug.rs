@@ -4,7 +4,7 @@ use core::fmt::{self, Arguments};
 use crate::{
     arch::PLATFORM,
     device::{serial::SerialDevice, Platform},
-    util::{OneTimeInit, SpinLock},
+    util::{IrqSafeSpinLock, OneTimeInit},
 };
 
 /// Defines the severity of the message
@@ -57,7 +57,7 @@ debug_tpl!($ warn, warnln, Warning);
 debug_tpl!($ error, errorln, Error);
 debug_tpl!($ fatal, fatalln, Fatal);
 
-static DEBUG_PRINTER: OneTimeInit<SpinLock<DebugPrinter>> = OneTimeInit::new();
+static DEBUG_PRINTER: OneTimeInit<IrqSafeSpinLock<DebugPrinter>> = OneTimeInit::new();
 
 impl LogLevel {
     fn log_prefix(self) -> &'static str {
@@ -97,7 +97,7 @@ impl fmt::Write for DebugPrinter {
 ///
 /// Will panic if called more than once.
 pub fn init() {
-    DEBUG_PRINTER.init(SpinLock::new(DebugPrinter {
+    DEBUG_PRINTER.init(IrqSafeSpinLock::new(DebugPrinter {
         sink: PLATFORM.primary_serial().unwrap(),
     }));
 }

@@ -7,7 +7,7 @@ use crate::{
         phys::reserved::{is_reserved, reserve_region},
         KERNEL_PHYS_BASE,
     },
-    util::{OneTimeInit, SpinLock},
+    util::{IrqSafeSpinLock, OneTimeInit},
 };
 
 use self::manager::PhysicalMemoryManager;
@@ -61,7 +61,8 @@ impl PhysicalMemoryRegion {
 }
 
 /// Global physical memory manager
-pub static PHYSICAL_MEMORY: OneTimeInit<SpinLock<PhysicalMemoryManager>> = OneTimeInit::new();
+pub static PHYSICAL_MEMORY: OneTimeInit<IrqSafeSpinLock<PhysicalMemoryManager>> =
+    OneTimeInit::new();
 
 /// Allocates a single physical page from the global manager
 pub fn alloc_page(usage: PageUsage) -> usize {
@@ -164,7 +165,7 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
 
     infoln!("{} available pages", page_count);
 
-    PHYSICAL_MEMORY.init(SpinLock::new(manager));
+    PHYSICAL_MEMORY.init(IrqSafeSpinLock::new(manager));
 }
 
 fn kernel_physical_memory_region() -> PhysicalMemoryRegion {

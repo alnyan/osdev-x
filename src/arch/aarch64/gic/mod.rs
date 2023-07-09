@@ -5,7 +5,7 @@ use crate::{
         Device,
     },
     mem::device::{DeviceMemory, DeviceMemoryIo},
-    util::{OneTimeInit, SpinLock},
+    util::{IrqSafeSpinLock, OneTimeInit},
 };
 
 use self::{gicc::Gicc, gicd::Gicd};
@@ -26,7 +26,7 @@ pub struct Gic {
     gicd: OneTimeInit<Gicd>,
     gicd_base: usize,
     gicc_base: usize,
-    irq_table: SpinLock<[Option<&'static (dyn InterruptSource + Sync)>; MAX_IRQ]>,
+    irq_table: IrqSafeSpinLock<[Option<&'static (dyn InterruptSource + Sync)>; MAX_IRQ]>,
 }
 
 impl IrqNumber {
@@ -91,7 +91,6 @@ impl InterruptController for Gic {
             match table[irq_number] {
                 None => panic!("No IRQ handler registered for irq{}", irq_number),
                 Some(handler) => {
-                    drop(table);
                     handler.handle_irq();
                 }
             }
@@ -126,7 +125,16 @@ impl Gic {
             gicd: OneTimeInit::new(),
             gicd_base,
             gicc_base,
-            irq_table: SpinLock::new([None; MAX_IRQ]),
+            irq_table: IrqSafeSpinLock::new([None; MAX_IRQ]),
         }
+    }
+
+    /// Initializes GICv2 for an application processor.
+    ///
+    /// # Safety
+    ///
+    /// Must not be called more than once per each AP. Must not be called from BSP.
+    pub unsafe fn init_smp_ap(&self) {
+        self.gicc.get().init();
     }
 }
