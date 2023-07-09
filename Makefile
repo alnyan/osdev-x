@@ -12,7 +12,8 @@ QEMU_OPTS=-s \
 		  -serial mon:stdio \
 		  -cpu cortex-a57 \
 		  -M virt \
-		  -display none
+		  -display none \
+		  -smp 4
 
 ifeq ($(QEMU_PAUSE),1)
 QEMU_OPTS+=-S

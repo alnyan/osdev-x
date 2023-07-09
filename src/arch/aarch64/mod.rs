@@ -5,7 +5,7 @@ use tock_registers::interfaces::{ReadWriteable, Readable};
 
 use crate::{
     absolute_address,
-    arch::aarch64::{devtree::FdtMemoryRegionIter, table::init_fixed_tables},
+    arch::aarch64::devtree::FdtMemoryRegionIter,
     debug,
     device::{Architecture, Platform},
     mem::{
@@ -15,7 +15,10 @@ use crate::{
     util::OneTimeInit,
 };
 
-use self::{devtree::DeviceTree, table::KERNEL_TABLES};
+use self::{
+    devtree::DeviceTree,
+    table::{init_fixed_tables, KERNEL_TABLES},
+};
 
 pub mod intrinsics;
 
@@ -25,7 +28,16 @@ pub mod boot;
 pub mod devtree;
 pub mod exception;
 pub mod gic;
+pub mod smp;
 pub mod table;
+
+pub(self) const BOOT_STACK_SIZE: usize = 32768;
+
+#[derive(Clone, Copy)]
+#[repr(C, align(0x20))]
+pub(self) struct KernelStack {
+    data: [u8; BOOT_STACK_SIZE],
+}
 
 /// AArch64 platform interface
 pub struct AArch64 {
@@ -40,8 +52,10 @@ pub static ARCHITECTURE: AArch64 = AArch64 {
 impl Architecture for AArch64 {
     const KERNEL_VIRT_OFFSET: usize = 0xFFFFFF8000000000;
 
-    unsafe fn init_mmu(&self) {
-        init_fixed_tables();
+    unsafe fn init_mmu(&self, bsp: bool) {
+        if bsp {
+            init_fixed_tables();
+        }
 
         let tables_phys = absolute_address!(KERNEL_TABLES).physicalize() as u64;
 
@@ -107,12 +121,14 @@ impl AArch64 {
 
 /// AArch64 kernel main entry point
 pub fn kernel_main(dtb_phys: usize) -> ! {
-    // Setup proper debugging functions
-    // NOTE it is critical that the code does not panic
+    intrinsics::mask_irqs();
+    // NOTE it is critical that the code does not panic until the debug is set up, otherwise no
+    // message will be displayed
     unsafe {
         ARCHITECTURE.init_device_tree(dtb_phys);
         PLATFORM.init_primary_serial();
     }
+    // Setup debugging functions
     debug::init();
 
     exception::init_exceptions();
@@ -121,6 +137,10 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
     unsafe {
         ARCHITECTURE.init_physical_memory(dtb_phys);
         PLATFORM.init();
+
+        let dt = ARCHITECTURE.dt.get();
+        smp::start_ap_cores(dt);
+
         intrinsics::unmask_irqs();
     }
 
