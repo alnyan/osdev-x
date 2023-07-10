@@ -5,6 +5,7 @@ use aarch64_cpu::registers::{CurrentEL, CPACR_EL1, ELR_EL1, SPSR_EL1, SP_EL0};
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use super::{
+    cpu::Cpu,
     exception,
     intrinsics::{mask_irqs, unmask_irqs},
     kernel_main,
@@ -16,6 +17,7 @@ use crate::{
     arch::PLATFORM,
     device::{Architecture, Platform},
     mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
+    sched::{self, CoreScheduler},
 };
 
 fn __aarch64_common_lower_entry() {
@@ -28,12 +30,12 @@ fn __aarch64_common_lower_entry() {
 }
 
 fn enter_higher_half(sp: usize, elr: usize, arg: usize) -> ! {
-    SP_EL0.set(sp as u64);
-    ELR_EL1.set(elr as u64);
-    SPSR_EL1.write(SPSR_EL1::M::EL1t);
-
     unsafe {
-        asm!("mov x0, {0}; eret", in(reg) arg, options(noreturn));
+        asm!(r#"
+            mov sp, {sp}
+            mov x0, {arg}
+            br {entry}
+            "#, entry = in(reg) elr, arg = in(reg) arg, sp = in(reg) sp, options(noreturn));
     }
 }
 
@@ -78,12 +80,8 @@ extern "C" fn __aarch64_ap_upper_entry(_x0: usize) -> ! {
     unsafe {
         PLATFORM.init(false);
 
-        // unmask_irqs();
-    }
-
-    // Just wait for now
-    loop {
-        aarch64_cpu::asm::wfi();
+        Cpu::init_local();
+        sched::enter();
     }
 }
 

@@ -44,12 +44,23 @@ __aa\bits\()_el\el\ht\()_\kind:
     stp x28, x29, [sp, #16 * 14]
     stp x30, x31, [sp, #16 * 15]
 
+    mrs x0, spsr_el1
+    mrs x1, elr_el1
+    mrs x2, sp_el0
+
     // TODO
-    stp xzr, xzr, [sp, #16 * 16]
-    stp xzr, xzr, [sp, #16 * 17]
+    stp x0, x1, [sp, #16 * 16]
+    stp x2, xzr, [sp, #16 * 17]
 .endm
 
 .macro EXC_RESTORE_STATE
+    ldp x0, x1, [sp, #16 * 16]
+    ldp x2, x3, [sp, #16 * 17]
+
+    msr spsr_el1, x0
+    msr elr_el1, x1
+    msr sp_el0, x2
+
     ldp x0, x1, [sp, #16 * 0]
     ldp x2, x3, [sp, #16 * 1]
     ldp x4, x5, [sp, #16 * 2]

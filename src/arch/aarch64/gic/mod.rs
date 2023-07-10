@@ -93,6 +93,7 @@ impl InterruptController for Gic {
             match table[irq_number] {
                 None => panic!("No IRQ handler registered for irq{}", irq_number),
                 Some(handler) => {
+                    drop(table);
                     handler.handle_irq();
                 }
             }

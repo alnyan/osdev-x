@@ -27,6 +27,8 @@ pub mod mem;
 pub mod sched;
 pub mod util;
 
+fn stack_trace(lr: usize, depth: usize) {}
+
 #[panic_handler]
 fn panic_handler(pi: &core::panic::PanicInfo) -> ! {
     static PANIC_HAPPENED: AtomicBool = AtomicBool::new(false);
@@ -35,20 +37,27 @@ fn panic_handler(pi: &core::panic::PanicInfo) -> ! {
         .compare_exchange(false, true, Ordering::Release, Ordering::Acquire)
         .is_ok()
     {
-        fatalln!("--- BEGIN PANIC ---");
-        fatal!("Kernel panic ");
+        log_print_raw!(LogLevel::Fatal, "--- BEGIN PANIC ---\n");
+        log_print_raw!(LogLevel::Fatal, "Kernel panic ");
 
         if let Some(location) = pi.location() {
-            fatalln!("at {}:{}:", location.file(), location.line());
+            log_print_raw!(
+                LogLevel::Fatal,
+                "at {}:{}:",
+                location.file(),
+                location.line()
+            );
         } else {
-            fatalln!(":");
+            log_print_raw!(LogLevel::Fatal, ":");
         }
+
+        log_print_raw!(LogLevel::Fatal, "\n");
 
         if let Some(msg) = pi.message() {
             debug_internal(*msg, LogLevel::Fatal);
-            fatalln!();
+            log_print_raw!(LogLevel::Fatal, "\n");
         }
-        fatalln!("---  END PANIC  ---");
+        log_print_raw!(LogLevel::Fatal, "---  END PANIC  ---\n");
 
         loop {}
     } else {

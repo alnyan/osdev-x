@@ -5,7 +5,7 @@ use tock_registers::interfaces::{ReadWriteable, Readable};
 
 use crate::{
     absolute_address,
-    arch::aarch64::devtree::FdtMemoryRegionIter,
+    arch::aarch64::{cpu::Cpu, devtree::FdtMemoryRegionIter},
     debug,
     device::{Architecture, Platform},
     mem::{
@@ -27,6 +27,8 @@ pub mod intrinsics;
 pub mod plat_qemu;
 
 pub mod boot;
+pub mod context;
+pub mod cpu;
 pub mod devtree;
 pub mod exception;
 pub mod gic;
@@ -144,11 +146,14 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
         let heap_base = phys::alloc_pages_contiguous(16, PageUsage::Used);
         heap::init_heap(heap_base, 16 * 0x1000);
 
+        Cpu::init_local();
+
         PLATFORM.init(true);
 
         let dt = ARCHITECTURE.dt.get();
         smp::start_ap_cores(dt);
 
-        sched::sched_enter();
+        // Initialize and enter the scheduler
+        sched::enter();
     }
 }

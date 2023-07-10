@@ -2,10 +2,25 @@
 use core::{
     cell::UnsafeCell,
     mem::MaybeUninit,
-    ops::Deref,
-    panic,
-    sync::atomic::{AtomicBool, Ordering},
+    ops::{Deref, DerefMut},
+    panic::{self, Location},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
+
+use aarch64_cpu::registers::DAIF;
+use spinning_top::{lock_api::RawMutex, Spinlock, SpinlockGuard};
+use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
+
+pub struct IrqSafeSpinlock<T> {
+    value: UnsafeCell<T>,
+    holder: AtomicUsize,
+    state: AtomicBool,
+}
+
+pub struct IrqSafeSpinlockGuard<'a, T> {
+    lock: &'a IrqSafeSpinlock<T>,
+    irq_state: u64,
+}
 
 /// Statically-allocated "dynamic" vector
 pub struct StaticVector<T, const N: usize> {
@@ -19,6 +34,9 @@ pub struct OneTimeInit<T> {
     value: UnsafeCell<MaybeUninit<T>>,
     state: AtomicBool,
 }
+
+unsafe impl<T> Sync for IrqSafeSpinlock<T> {}
+unsafe impl<T> Send for IrqSafeSpinlock<T> {}
 
 unsafe impl<T> Sync for OneTimeInit<T> {}
 unsafe impl<T> Send for OneTimeInit<T> {}
@@ -113,5 +131,68 @@ impl<T, const N: usize> Deref for StaticVector<T, N> {
 
     fn deref(&self) -> &Self::Target {
         unsafe { MaybeUninit::slice_assume_init_ref(&self.data[..self.len]) }
+    }
+}
+
+impl<T> IrqSafeSpinlock<T> {
+    pub const fn new(value: T) -> Self {
+        Self {
+            value: UnsafeCell::new(value),
+            holder: AtomicUsize::new(0),
+            state: AtomicBool::new(false),
+        }
+    }
+
+    pub fn lock(&self) -> IrqSafeSpinlockGuard<T> {
+        let mut caller;
+        unsafe {
+            core::arch::asm!("mov {0}, lr", out(reg) caller);
+        }
+
+        // Disable IRQs to avoid IRQ handler trying to acquire the same lock
+        let irq_state = DAIF.get();
+        DAIF.modify(DAIF::I::SET);
+
+        // Loop until the lock can be acquired
+        while self
+            .state
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            aarch64_cpu::asm::nop();
+        }
+
+        self.holder.store(caller, Ordering::SeqCst);
+
+        IrqSafeSpinlockGuard {
+            lock: self,
+            irq_state,
+        }
+    }
+}
+
+impl<'a, T> Deref for IrqSafeSpinlockGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.lock.value.get() }
+    }
+}
+
+impl<'a, T> DerefMut for IrqSafeSpinlockGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.lock.value.get() }
+    }
+}
+
+impl<'a, T> Drop for IrqSafeSpinlockGuard<'a, T> {
+    fn drop(&mut self) {
+        self.lock.holder.store(0, Ordering::SeqCst);
+        // First release the lock and only then re-enable interrupts
+        self.lock
+            .state
+            .compare_exchange(true, false, Ordering::Release, Ordering::Relaxed)
+            .unwrap();
+        DAIF.set(self.irq_state);
     }
 }

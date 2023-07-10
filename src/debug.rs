@@ -6,7 +6,7 @@ use spinning_top::Spinlock;
 use crate::{
     arch::PLATFORM,
     device::{serial::SerialDevice, Platform},
-    util::OneTimeInit,
+    util::{IrqSafeSpinlock, OneTimeInit},
 };
 
 /// Defines the severity of the message
@@ -28,9 +28,15 @@ struct DebugPrinter {
     sink: &'static dyn SerialDevice,
 }
 
-macro_rules! log_print {
+macro_rules! log_print_raw {
     ($level:expr, $($args:tt)+) => {
         $crate::debug::debug_internal(format_args!($($args)+), $level)
+    };
+}
+
+macro_rules! log_print {
+    ($level:expr, $($args:tt)+) => {
+        log_print_raw!($level, "cpu{}:{}:{}: {}", $crate::arch::aarch64::cpu::Cpu::local_id(), file!(), line!(), format_args!($($args)+))
     };
 }
 
@@ -59,13 +65,14 @@ debug_tpl!($ warn, warnln, Warning);
 debug_tpl!($ error, errorln, Error);
 debug_tpl!($ fatal, fatalln, Fatal);
 
-static DEBUG_PRINTER: OneTimeInit<Spinlock<DebugPrinter>> = OneTimeInit::new();
+#[no_mangle]
+static DEBUG_PRINTER: OneTimeInit<IrqSafeSpinlock<DebugPrinter>> = OneTimeInit::new();
 
 impl LogLevel {
     fn log_prefix(self) -> &'static str {
         match self {
             LogLevel::Debug => "",
-            LogLevel::Info => "\x1b[37m\x1b[1m",
+            LogLevel::Info => "\x1b[36m\x1b[1m",
             LogLevel::Warning => "\x1b[33m\x1b[1m",
             LogLevel::Error => "\x1b[31m\x1b[1m",
             LogLevel::Fatal => "\x1b[38;2;255;0;0m\x1b[1m",
@@ -75,8 +82,8 @@ impl LogLevel {
     fn log_suffix(self) -> &'static str {
         match self {
             LogLevel::Debug => "",
-            LogLevel::Info => "",
-            LogLevel::Warning => "",
+            LogLevel::Info => "\x1b[0m",
+            LogLevel::Warning => "\x1b[0m",
             LogLevel::Error => "\x1b[0m",
             LogLevel::Fatal => "\x1b[0m",
         }
@@ -99,7 +106,7 @@ impl fmt::Write for DebugPrinter {
 ///
 /// Will panic if called more than once.
 pub fn init() {
-    DEBUG_PRINTER.init(Spinlock::new(DebugPrinter {
+    DEBUG_PRINTER.init(IrqSafeSpinlock::new(DebugPrinter {
         sink: PLATFORM.primary_serial().unwrap(),
     }));
 }
