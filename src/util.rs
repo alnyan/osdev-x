@@ -2,12 +2,10 @@
 use core::{
     cell::UnsafeCell,
     mem::MaybeUninit,
-    ops::{Deref, DerefMut},
+    ops::Deref,
     panic,
     sync::atomic::{AtomicBool, Ordering},
 };
-
-use crate::arch::aarch64::intrinsics::{restore_irqs, save_mask_irqs};
 
 /// Statically-allocated "dynamic" vector
 pub struct StaticVector<T, const N: usize> {
@@ -22,26 +20,8 @@ pub struct OneTimeInit<T> {
     state: AtomicBool,
 }
 
-/// Locked struct allowing shared mutable access to the wrapped value
-#[repr(C)]
-pub struct IrqSafeSpinLock<T> {
-    value: UnsafeCell<T>,
-    state: AtomicBool,
-}
-
-/// Wrapper for a lock()ed [SpinLock] value
-#[repr(C)]
-pub struct IrqSafeSpinLockGuard<'a, T> {
-    value: *mut T,
-    lock: &'a IrqSafeSpinLock<T>,
-    saved_irq_state: u64,
-}
-
 unsafe impl<T> Sync for OneTimeInit<T> {}
 unsafe impl<T> Send for OneTimeInit<T> {}
-
-unsafe impl<T> Sync for IrqSafeSpinLock<T> {}
-unsafe impl<T> Send for IrqSafeSpinLock<T> {}
 
 impl<T> OneTimeInit<T> {
     /// Wraps the value in an [OneTimeInit]
@@ -88,68 +68,6 @@ impl<T> OneTimeInit<T> {
         }
 
         unsafe { (*self.value.get()).assume_init_ref() }
-    }
-}
-
-impl<T> IrqSafeSpinLock<T> {
-    /// Wraps the value in a [SpinLock] structure
-    pub const fn new(value: T) -> Self {
-        Self {
-            value: UnsafeCell::new(value),
-            state: AtomicBool::new(false),
-        }
-    }
-
-    /// Blocks until no other lock is held on the object, then locks it and returns a
-    /// [SpinLockGuard]
-    pub fn lock(&self) -> IrqSafeSpinLockGuard<T> {
-        let saved_irq_state = save_mask_irqs();
-
-        while self
-            .state
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-            .is_err()
-        {
-            aarch64_cpu::asm::nop();
-        }
-
-        IrqSafeSpinLockGuard {
-            value: self.value.get(),
-            saved_irq_state,
-            lock: self,
-        }
-    }
-
-    /// Resets the lock.
-    ///
-    /// # Safety
-    ///
-    /// Only safe to use from a [SpinLockGuard]'s [Drop] impl.
-    pub unsafe fn force_release(&self) {
-        self.state.store(false, Ordering::Release);
-    }
-}
-
-impl<T> Deref for IrqSafeSpinLockGuard<'_, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*(self.value) }
-    }
-}
-
-impl<T> DerefMut for IrqSafeSpinLockGuard<'_, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *(self.value) }
-    }
-}
-
-impl<T> Drop for IrqSafeSpinLockGuard<'_, T> {
-    fn drop(&mut self) {
-        unsafe {
-            restore_irqs(self.saved_irq_state);
-            self.lock.force_release();
-        }
     }
 }
 

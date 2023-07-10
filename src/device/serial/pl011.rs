@@ -1,4 +1,5 @@
 //! ARM PL011 driver
+use spinning_top::Spinlock;
 use tock_registers::{
     interfaces::{ReadWriteable, Readable, Writeable},
     register_bitfields, register_structs,
@@ -10,7 +11,7 @@ use crate::{
     arch::{aarch64::gic::IrqNumber, PLATFORM},
     device::{interrupt::InterruptSource, Device, Platform},
     mem::device::DeviceMemoryIo,
-    util::{IrqSafeSpinLock, OneTimeInit},
+    util::OneTimeInit,
 };
 
 register_bitfields! {
@@ -57,7 +58,7 @@ struct Pl011Inner {
 
 /// PL011 device instance
 pub struct Pl011 {
-    inner: OneTimeInit<IrqSafeSpinLock<Pl011Inner>>,
+    inner: OneTimeInit<Spinlock<Pl011Inner>>,
     base: usize,
     irq: IrqNumber,
 }
@@ -109,7 +110,7 @@ impl Device for Pl011 {
         };
         inner.init();
 
-        self.inner.init(IrqSafeSpinLock::new(inner));
+        self.inner.init(Spinlock::new(inner));
     }
 
     fn name(&self) -> &'static str {
@@ -118,8 +119,12 @@ impl Device for Pl011 {
 }
 
 impl Pl011 {
-    /// Constructs an instance of the device at `base`
-    pub const fn new(base: usize, irq: IrqNumber) -> Self {
+    /// Constructs an instance of the device at `base`.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the address is valid.
+    pub const unsafe fn new(base: usize, irq: IrqNumber) -> Self {
         Self {
             inner: OneTimeInit::new(),
             base,

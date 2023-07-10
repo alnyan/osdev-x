@@ -9,5 +9,7 @@ edition = "2021"
 aarch64-cpu = "9.3.1"
 bitflags = "2.3.3"
 fdt-rs = { version = "0.4.3", default-features = false }
+linked_list_allocator = "0.10.5"
+spinning_top = "0.2.5"
 static_assertions = "1.1.0"
 tock-registers = "0.8.1"

@@ -9,7 +9,8 @@ use crate::{
     debug,
     device::{Architecture, Platform},
     mem::{
-        phys::{self, reserved::reserve_region, PhysicalMemoryRegion},
+        heap,
+        phys::{self, reserved::reserve_region, PageUsage, PhysicalMemoryRegion},
         ConvertAddress,
     },
     util::OneTimeInit,
@@ -137,6 +138,11 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
     debugln!("Initializing {} platform", PLATFORM.name());
     unsafe {
         ARCHITECTURE.init_physical_memory(dtb_phys);
+
+        // Setup heap
+        let heap_base = phys::alloc_pages_contiguous(16, PageUsage::Used);
+        heap::init_heap(heap_base, 16 * 0x1000);
+
         PLATFORM.init(true);
 
         let dt = ARCHITECTURE.dt.get();

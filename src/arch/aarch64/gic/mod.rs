@@ -1,11 +1,13 @@
 //! ARM Generic Interrupt Controller v2 driver
+use spinning_top::Spinlock;
+
 use crate::{
     device::{
         interrupt::{InterruptController, InterruptSource},
         Device,
     },
     mem::device::{DeviceMemory, DeviceMemoryIo},
-    util::{IrqSafeSpinLock, OneTimeInit},
+    util::OneTimeInit,
 };
 
 use self::{gicc::Gicc, gicd::Gicd};
@@ -26,7 +28,7 @@ pub struct Gic {
     gicd: OneTimeInit<Gicd>,
     gicd_base: usize,
     gicc_base: usize,
-    irq_table: IrqSafeSpinLock<[Option<&'static (dyn InterruptSource + Sync)>; MAX_IRQ]>,
+    irq_table: Spinlock<[Option<&'static (dyn InterruptSource + Sync)>; MAX_IRQ]>,
 }
 
 impl IrqNumber {
@@ -125,7 +127,7 @@ impl Gic {
             gicd: OneTimeInit::new(),
             gicd_base,
             gicc_base,
-            irq_table: IrqSafeSpinLock::new([None; MAX_IRQ]),
+            irq_table: Spinlock::new([None; MAX_IRQ]),
         }
     }
 

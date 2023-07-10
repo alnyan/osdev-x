@@ -12,7 +12,7 @@ PROFILE = { source = "${CARGO_MAKE_PROFILE}", mapping = { "production" = "releas
 CARGO_RELEASE_OPT = { source = "${CARGO_MAKE_PROFILE}", mapping = { "production" = "--release", "development" = "" } }
 CARGO_OPTS="""\
     --target=${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/etc/${TARGET}.json \
-    -Z build-std=core,alloc \
+    -Z build-std=core,alloc,compiler_builtins \
     ${CARGO_RELEASE_OPT} \
 """
 

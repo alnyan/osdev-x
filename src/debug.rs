@@ -1,10 +1,12 @@
 //! Utilities for debug information logging
 use core::fmt::{self, Arguments};
 
+use spinning_top::Spinlock;
+
 use crate::{
     arch::PLATFORM,
     device::{serial::SerialDevice, Platform},
-    util::{IrqSafeSpinLock, OneTimeInit},
+    util::OneTimeInit,
 };
 
 /// Defines the severity of the message
@@ -57,7 +59,7 @@ debug_tpl!($ warn, warnln, Warning);
 debug_tpl!($ error, errorln, Error);
 debug_tpl!($ fatal, fatalln, Fatal);
 
-static DEBUG_PRINTER: OneTimeInit<IrqSafeSpinLock<DebugPrinter>> = OneTimeInit::new();
+static DEBUG_PRINTER: OneTimeInit<Spinlock<DebugPrinter>> = OneTimeInit::new();
 
 impl LogLevel {
     fn log_prefix(self) -> &'static str {
@@ -97,7 +99,7 @@ impl fmt::Write for DebugPrinter {
 ///
 /// Will panic if called more than once.
 pub fn init() {
-    DEBUG_PRINTER.init(IrqSafeSpinLock::new(DebugPrinter {
+    DEBUG_PRINTER.init(Spinlock::new(DebugPrinter {
         sink: PLATFORM.primary_serial().unwrap(),
     }));
 }

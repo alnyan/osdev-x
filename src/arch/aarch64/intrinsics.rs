@@ -1,8 +1,5 @@
 //! Intrinsic helper functions for AArch64 platforms
 
-use aarch64_cpu::registers::DAIF;
-use tock_registers::interfaces::{Readable, Writeable};
-
 /// Returns an absolute address to the given symbol
 #[macro_export]
 macro_rules! absolute_address {
@@ -13,19 +10,6 @@ macro_rules! absolute_address {
         }
         _x
     }};
-}
-
-/// Saves current IRQ state and then masks them
-pub fn save_mask_irqs() -> u64 {
-    let state = DAIF.get();
-    unsafe {
-        core::arch::asm!("msr daifset, {bits}", bits = const 2, options(nomem, nostack, preserves_flags));
-    }
-    state
-}
-
-pub unsafe fn restore_irqs(daif: u64) {
-    DAIF.set(daif);
 }
 
 /// Masks IRQs

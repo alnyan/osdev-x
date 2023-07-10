@@ -11,6 +11,8 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::debug::{debug_internal, LogLevel};

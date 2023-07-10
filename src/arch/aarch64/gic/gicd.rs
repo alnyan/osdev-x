@@ -1,11 +1,12 @@
 //! ARM GICv2 Distributor registers
+use spinning_top::Spinlock;
 use tock_registers::{
     interfaces::{ReadWriteable, Readable, Writeable},
     register_bitfields, register_structs,
     registers::{ReadOnly, ReadWrite},
 };
 
-use crate::{mem::device::DeviceMemoryIo, util::IrqSafeSpinLock};
+use crate::mem::device::DeviceMemoryIo;
 
 use super::IrqNumber;
 
@@ -54,7 +55,7 @@ register_structs! {
 }
 
 pub(super) struct Gicd {
-    shared_regs: IrqSafeSpinLock<DeviceMemoryIo<GicdSharedRegs>>,
+    shared_regs: Spinlock<DeviceMemoryIo<GicdSharedRegs>>,
     banked_regs: DeviceMemoryIo<GicdBankedRegs>,
 }
 
@@ -77,7 +78,7 @@ impl Gicd {
         shared_regs: DeviceMemoryIo<GicdSharedRegs>,
         banked_regs: DeviceMemoryIo<GicdBankedRegs>,
     ) -> Self {
-        let shared_regs = IrqSafeSpinLock::new(shared_regs);
+        let shared_regs = Spinlock::new(shared_regs);
         Self {
             shared_regs,
             banked_regs,

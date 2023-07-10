@@ -5,6 +5,7 @@ use crate::{
 };
 
 pub mod device;
+pub mod heap;
 pub mod phys;
 pub mod table;
 

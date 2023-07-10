@@ -1,5 +1,4 @@
 //! AArch64 Generic Timer
-
 use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0, MPIDR_EL1};
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
@@ -10,10 +9,12 @@ use crate::{
 
 use super::gic::IrqNumber;
 
+/// ARM Generic Timer driver
 pub struct ArmTimer {
     irq: IrqNumber,
 }
 
+/// ARM timer tick interval (in some time units?)
 pub const TICK_INTERVAL: u64 = 10000000;
 
 impl Device for ArmTimer {
@@ -43,6 +44,11 @@ impl InterruptSource for ArmTimer {
 }
 
 impl ArmTimer {
+    /// Constructs an instance of ARM generic timer.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the function has not been called before.
     pub const unsafe fn new(irq: IrqNumber) -> Self {
         Self { irq }
     }

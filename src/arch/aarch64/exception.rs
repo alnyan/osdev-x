@@ -59,7 +59,7 @@ extern "C" fn __aa64_exc_sync_handler(frame: *mut ExceptionFrame) {
 }
 
 #[no_mangle]
-extern "C" fn __aa64_exc_irq_handler(frame: *mut ExceptionFrame) {
+extern "C" fn __aa64_exc_irq_handler(_frame: *mut ExceptionFrame) {
     unsafe {
         let ic = IrqContext::new();
         PLATFORM.interrupt_controller().handle_pending_irqs(&ic);
