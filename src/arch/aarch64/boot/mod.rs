@@ -78,7 +78,7 @@ extern "C" fn __aarch64_ap_upper_entry(_x0: usize) -> ! {
     unsafe {
         PLATFORM.init(false);
 
-        unmask_irqs();
+        // unmask_irqs();
     }
 
     // Just wait for now

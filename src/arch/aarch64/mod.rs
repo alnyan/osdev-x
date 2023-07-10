@@ -13,6 +13,7 @@ use crate::{
         phys::{self, reserved::reserve_region, PageUsage, PhysicalMemoryRegion},
         ConvertAddress,
     },
+    sched,
     util::OneTimeInit,
 };
 
@@ -148,10 +149,6 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
         let dt = ARCHITECTURE.dt.get();
         smp::start_ap_cores(dt);
 
-        intrinsics::unmask_irqs();
-    }
-
-    loop {
-        aarch64_cpu::asm::wfi();
+        sched::sched_enter();
     }
 }

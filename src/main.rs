@@ -24,6 +24,7 @@ pub mod arch;
 
 pub mod device;
 pub mod mem;
+pub mod sched;
 pub mod util;
 
 #[panic_handler]
