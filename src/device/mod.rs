@@ -55,21 +55,3 @@ pub trait Platform {
     /// May not be initialized at the moment of calling.
     fn interrupt_controller(&self) -> &dyn InterruptController<IrqNumber = Self::IrqNumber>;
 }
-
-/// Interface for an architecture-specific facilities
-pub trait Architecture {
-    /// Address, to which "zero" address is mapped in the virtual address space
-    const KERNEL_VIRT_OFFSET: usize;
-
-    /// Initializes the memory management unit and sets up virtual memory management.
-    /// `bsp` flag is provided to make sure mapping tables are only initialized once in a SMP
-    /// system.
-    ///
-    /// # Safety
-    ///
-    /// Unsafe to call if the MMU has already been initialized.
-    unsafe fn init_mmu(&self, bsp: bool);
-
-    /// Allocates a virtual mapping for the specified physical memory region
-    fn map_device_pages(&self, phys: usize, count: usize) -> usize;
-}

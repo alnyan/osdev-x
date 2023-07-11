@@ -3,10 +3,10 @@ use spinning_top::Spinlock;
 use tock_registers::{
     interfaces::{ReadWriteable, Readable, Writeable},
     register_bitfields, register_structs,
-    registers::{ReadOnly, ReadWrite},
+    registers::{ReadOnly, ReadWrite, WriteOnly},
 };
 
-use crate::mem::device::DeviceMemoryIo;
+use crate::{device::interrupt::IpiDeliveryTarget, mem::device::DeviceMemoryIo};
 
 use super::IrqNumber;
 
@@ -23,7 +23,16 @@ register_bitfields! {
         Offset2 OFFSET(16) NUMBITS(8) [],
         Offset1 OFFSET(8) NUMBITS(8) [],
         Offset0 OFFSET(0) NUMBITS(8) []
-    ]
+    ],
+    SGIR [
+        TargetListFilter OFFSET(24) NUMBITS(2) [
+            SpecifiedOnly = 0,
+            AllExceptLocal = 1,
+            LocalOnly = 2,
+        ],
+        CPUTargetList OFFSET(16) NUMBITS(8) [],
+        INTID OFFSET(0) NUMBITS(4) []
+    ],
 }
 
 register_structs! {
@@ -37,7 +46,9 @@ register_structs! {
         (0x820 => ITARGETSR: [ReadWrite<u32, ITARGETSR::Register>; 248]),
         (0xC00 => _2),
         (0xC08 => ICFGR: [ReadWrite<u32>; 62]),
-        (0xD00 => @END),
+        (0xD00 => _3),
+        (0xF00 => SGIR: WriteOnly<u32, SGIR::Register>),
+        (0xF04 => @END),
     }
 }
 
@@ -83,6 +94,19 @@ impl Gicd {
             shared_regs,
             banked_regs,
         }
+    }
+
+    pub unsafe fn set_sgir(&self, target: IpiDeliveryTarget, interrupt_id: u64) {
+        assert_eq!(interrupt_id & !0xF, 0);
+        let value = match target {
+            IpiDeliveryTarget::AllExceptLocal => SGIR::TargetListFilter::AllExceptLocal,
+            IpiDeliveryTarget::Specified(mask) => {
+                // TODO: need to handle self-ipi case, releasing the lock somehow
+                todo!();
+            }
+        } + SGIR::INTID.val(interrupt_id as u32);
+
+        self.shared_regs.lock().SGIR.write(value);
     }
 
     fn local_gic_target_mask(&self) -> u32 {

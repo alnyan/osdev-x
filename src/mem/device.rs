@@ -1,7 +1,7 @@
 //! Facilities for mapping devices to virtual address space
 use core::{marker::PhantomData, mem::size_of, ops::Deref};
 
-use crate::{arch::ARCHITECTURE, device::Architecture};
+use crate::arch::{Architecture, ARCHITECTURE};
 
 /// Generic MMIO access mapping
 #[derive(Clone)]

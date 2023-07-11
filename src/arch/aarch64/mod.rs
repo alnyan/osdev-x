@@ -1,14 +1,22 @@
 //! AArch64 architecture and platforms implementation
 
-use aarch64_cpu::registers::{ID_AA64MMFR0_EL1, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1};
+use core::sync::atomic::Ordering;
+
+use aarch64_cpu::{
+    asm::barrier,
+    registers::{DAIF, ID_AA64MMFR0_EL1, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1},
+};
 use plat_qemu::PLATFORM;
 use tock_registers::interfaces::{ReadWriteable, Readable};
 
 use crate::{
     absolute_address,
-    arch::aarch64::{cpu::Cpu, devtree::FdtMemoryRegionIter},
+    arch::{
+        aarch64::{boot::CPU_INIT_FENCE, cpu::Cpu, devtree::FdtMemoryRegionIter, smp::CPU_COUNT},
+        Architecture,
+    },
     debug,
-    device::{Architecture, Platform},
+    device::Platform,
     mem::{
         heap,
         phys::{self, reserved::reserve_region, PageUsage, PhysicalMemoryRegion},
@@ -87,6 +95,22 @@ impl Architecture for AArch64 {
     fn map_device_pages(&self, phys: usize, count: usize) -> usize {
         unsafe { KERNEL_TABLES.map_device_pages(phys, count) }
     }
+
+    fn wait_for_interrupt() {
+        aarch64_cpu::asm::wfi();
+    }
+
+    unsafe fn set_interrupt_mask(mask: bool) {
+        if mask {
+            DAIF.modify(DAIF::I::SET);
+        } else {
+            DAIF.modify(DAIF::I::CLEAR);
+        }
+    }
+
+    fn interrupt_mask() -> bool {
+        DAIF.read(DAIF::I) != 0
+    }
 }
 
 impl AArch64 {
@@ -127,10 +151,11 @@ impl AArch64 {
 
 /// AArch64 kernel main entry point
 pub fn kernel_main(dtb_phys: usize) -> ! {
-    intrinsics::mask_irqs();
     // NOTE it is critical that the code does not panic until the debug is set up, otherwise no
     // message will be displayed
     unsafe {
+        AArch64::set_interrupt_mask(true);
+
         ARCHITECTURE.init_device_tree(dtb_phys);
         PLATFORM.init_primary_serial();
     }
@@ -153,6 +178,11 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
 
         let dt = ARCHITECTURE.dt.get();
         smp::start_ap_cores(dt);
+
+        Cpu::init_ipi_queues();
+
+        CPU_INIT_FENCE.signal();
+        CPU_INIT_FENCE.wait_all(CPU_COUNT.load(Ordering::Acquire));
 
         task::init();
 

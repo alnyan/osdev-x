@@ -150,6 +150,14 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
         find_contiguous_region(it.clone(), (pages_array_size + 0xFFF) / 0x1000).unwrap();
     debugln!("Placing page tracking at {:#x}", pages_array_base);
 
+    reserve_region(
+        "pages",
+        PhysicalMemoryRegion {
+            base: pages_array_base,
+            size: (pages_array_size + 0xFFF) / 0x1000,
+        },
+    );
+
     let mut manager = PhysicalMemoryManager::new(phys_start, pages_array_base, pages_array_size);
     let mut page_count = 0;
 

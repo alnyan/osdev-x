@@ -5,8 +5,9 @@ use aarch64_cpu::registers::{ELR_EL1, FAR_EL1, VBAR_EL1};
 use tock_registers::interfaces::{Readable, Writeable};
 
 use crate::{
-    arch::PLATFORM,
+    arch::{aarch64::cpu::Cpu, CpuMessage, PLATFORM},
     device::{interrupt::IrqContext, Platform},
+    panic::panic_secondary,
 };
 
 /// Struct for register values saved when taking an exception
@@ -74,6 +75,18 @@ extern "C" fn __aa64_exc_fiq_handler() {
 #[no_mangle]
 extern "C" fn __aa64_exc_serror_handler() {
     todo!();
+}
+
+pub(super) fn ipi_handler(msg: Option<CpuMessage>) {
+    if let Some(msg) = msg {
+        match msg {
+            CpuMessage::Panic => panic_secondary(),
+        }
+    } else {
+        warnln!("Spurious IPI received by cpu{}", Cpu::local_id());
+        todo!();
+    }
+    loop {}
 }
 
 global_asm!(include_str!("vectors.S"));

@@ -11,19 +11,3 @@ macro_rules! absolute_address {
         _x
     }};
 }
-
-/// Masks IRQs
-pub fn mask_irqs() {
-    unsafe {
-        core::arch::asm!("msr daifset, 2");
-    }
-}
-
-/// Unmasks IRQs, allowing their delivery to the CPU.
-///
-/// # Safety
-///
-/// The caller must ensure IRQs can actually be handled when calling.
-pub unsafe fn unmask_irqs() {
-    core::arch::asm!("msr daifclr, 2");
-}

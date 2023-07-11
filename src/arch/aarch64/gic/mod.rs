@@ -1,9 +1,13 @@
 //! ARM Generic Interrupt Controller v2 driver
+use core::sync::atomic::Ordering;
+
+use aarch64_cpu::asm::barrier;
 use spinning_top::Spinlock;
 
 use crate::{
+    arch::CpuMessage,
     device::{
-        interrupt::{InterruptController, InterruptSource},
+        interrupt::{InterruptController, InterruptSource, IpiDeliveryTarget},
         Device,
     },
     mem::device::{DeviceMemory, DeviceMemoryIo},
@@ -12,7 +16,10 @@ use crate::{
 
 use self::{gicc::Gicc, gicd::Gicd};
 
+use super::{cpu::Cpu, exception::ipi_handler, smp::CPU_COUNT};
+
 const MAX_IRQ: usize = 300;
+const IPI_VECTOR: u64 = 1;
 
 pub mod gicc;
 pub mod gicd;
@@ -88,6 +95,13 @@ impl InterruptController for Gic {
 
         gicc.clear_irq(irq_number, ic);
 
+        if irq_number as u64 == IPI_VECTOR {
+            // IPI received
+            let msg = Cpu::local().get_ipi();
+            ipi_handler(msg);
+            return;
+        }
+
         {
             let table = self.irq_table.lock();
             match table[irq_number] {
@@ -113,6 +127,27 @@ impl InterruptController for Gic {
 
         debugln!("Bound irq{} to {:?}", irq, Device::name(handler));
         table[irq] = Some(handler);
+    }
+
+    unsafe fn send_ipi(&self, target: IpiDeliveryTarget, msg: CpuMessage) {
+        // TODO message queue insertion should be moved
+        match target {
+            IpiDeliveryTarget::AllExceptLocal => {
+                let local = Cpu::local_id();
+                for i in 0..CPU_COUNT.load(Ordering::Acquire) {
+                    if i != local as usize {
+                        Cpu::push_ipi_queue(i as u32, msg);
+                    }
+                }
+            }
+            IpiDeliveryTarget::Specified(_) => todo!(),
+        }
+
+        // Issue a memory barrier
+        barrier::dsb(barrier::ISH);
+        barrier::isb(barrier::SY);
+
+        self.gicd.get().set_sgir(target, IPI_VECTOR);
     }
 }
 

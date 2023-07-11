@@ -75,6 +75,7 @@ extern "C" fn stats_thread(_x: usize) -> ! {
     let mut counter = 0;
     let this = Process::current();
     let pid = this.id();
+    panic!("Test panic");
 
     loop {
         for _ in 0..1000000 {
