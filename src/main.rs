@@ -7,6 +7,7 @@
     const_trait_impl,
     maybe_uninit_slice
 )]
+#![allow(clippy::new_without_default)]
 #![warn(missing_docs)]
 #![no_std]
 #![no_main]
@@ -24,10 +25,9 @@ pub mod arch;
 
 pub mod device;
 pub mod mem;
-pub mod sched;
+pub mod sync;
+pub mod task;
 pub mod util;
-
-fn stack_trace(lr: usize, depth: usize) {}
 
 #[panic_handler]
 fn panic_handler(pi: &core::panic::PanicInfo) -> ! {

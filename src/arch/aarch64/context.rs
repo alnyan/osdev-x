@@ -1,3 +1,4 @@
+//! AArch64-specific task context implementation
 use core::{arch::global_asm, cell::UnsafeCell};
 
 use crate::mem::{
@@ -5,10 +6,9 @@ use crate::mem::{
     ConvertAddress,
 };
 
-pub struct ContextStack {
+struct StackBuilder {
     base: usize,
     sp: usize,
-    size: usize,
 }
 
 #[repr(C, align(0x10))]
@@ -17,22 +17,22 @@ struct TaskContextInner {
     sp: usize,
 }
 
+/// AArch64 implementation of a task context
 pub struct TaskContext {
     inner: UnsafeCell<TaskContextInner>,
 }
 
 unsafe impl Sync for TaskContext {}
 
-impl ContextStack {
-    pub fn new(base: usize, size: usize) -> Self {
+impl StackBuilder {
+    fn new(base: usize, size: usize) -> Self {
         Self {
             base,
-            size,
             sp: base + size,
         }
     }
 
-    pub fn push(&mut self, value: usize) {
+    fn push(&mut self, value: usize) {
         if self.sp == self.base {
             panic!();
         }
@@ -42,18 +42,18 @@ impl ContextStack {
         }
     }
 
-    pub fn skip(&mut self, count: usize) {
+    fn _skip(&mut self, count: usize) {
         self.sp -= count * 8;
         if self.sp < self.base {
             panic!();
         }
     }
 
-    pub fn build(self) -> usize {
+    fn build(self) -> usize {
         self.sp
     }
 
-    pub fn init_common(&mut self, entry: usize) {
+    fn init_common(&mut self, entry: usize) {
         self.push(entry); // x30/lr
         self.push(0); // x29
         self.push(0); // x28
@@ -70,16 +70,17 @@ impl ContextStack {
 }
 
 impl TaskContext {
-    pub fn kernel(entry: usize, arg: usize) -> Self {
+    /// Constructs a kernel thread context
+    pub fn kernel(entry: extern "C" fn(usize) -> !, arg: usize) -> Self {
         const KERNEL_TASK_PAGES: usize = 4;
         let stack_base = unsafe {
             phys::alloc_pages_contiguous(KERNEL_TASK_PAGES, PageUsage::Used).virtualize()
         };
 
-        let mut stack = ContextStack::new(stack_base, KERNEL_TASK_PAGES * 0x1000);
+        let mut stack = StackBuilder::new(stack_base, KERNEL_TASK_PAGES * 0x1000);
 
         // Entry and argument
-        stack.push(entry);
+        stack.push(entry as _);
         stack.push(arg);
 
         stack.init_common(__aarch64_task_enter_kernel as _);
@@ -93,10 +94,20 @@ impl TaskContext {
         }
     }
 
+    /// Starts execution of `self` task on local CPU.
+    ///
+    /// # Safety
+    ///
+    /// Only meant to be called from the scheduler code.
     pub unsafe fn enter(&self) -> ! {
         __aarch64_enter_task(self.inner.get())
     }
 
+    /// Switches from `from` task to `self` task.
+    ///
+    /// # Safety
+    ///
+    /// Only meant to be called from the scheduler code.
     pub unsafe fn switch(&self, from: &Self) {
         __aarch64_switch_task(self.inner.get(), from.inner.get())
     }

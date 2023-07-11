@@ -65,3 +65,11 @@ args = [
 env = { "KERNEL_BINARY" = "${OUTPUT_DIR}/${CARGO_MAKE_PROJECT_NAME}" }
 command = "${GDB}"
 args = ["-x", "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/etc/${TARGET}.gdb", "${KERNEL_BINARY}"]
+
+[tasks.doc]
+command = "cargo"
+args = ["doc"]
+
+[tasks.clippy]
+command = "cargo"
+args = ["clippy", "@@split(CARGO_OPTS, ,remove-empty)"]

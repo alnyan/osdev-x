@@ -1,23 +1,19 @@
 //! Main entry point for the AArch64 platforms
 use core::{arch::asm, sync::atomic::Ordering};
 
-use aarch64_cpu::registers::{CurrentEL, CPACR_EL1, ELR_EL1, SPSR_EL1, SP_EL0};
-use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
+use aarch64_cpu::registers::{CurrentEL, CPACR_EL1};
+use tock_registers::interfaces::{ReadWriteable, Readable};
 
 use super::{
-    cpu::Cpu,
-    exception,
-    intrinsics::{mask_irqs, unmask_irqs},
-    kernel_main,
-    smp::CPU_COUNT,
-    KernelStack, ARCHITECTURE, BOOT_STACK_SIZE,
+    cpu::Cpu, exception, intrinsics::mask_irqs, kernel_main, smp::CPU_COUNT, KernelStack,
+    ARCHITECTURE, BOOT_STACK_SIZE,
 };
 use crate::{
     absolute_address,
     arch::PLATFORM,
     device::{Architecture, Platform},
     mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
-    sched::{self},
+    task,
 };
 
 fn __aarch64_common_lower_entry() {
@@ -81,7 +77,7 @@ extern "C" fn __aarch64_ap_upper_entry(_x0: usize) -> ! {
         PLATFORM.init(false);
 
         Cpu::init_local();
-        sched::enter();
+        task::enter();
     }
 }
 

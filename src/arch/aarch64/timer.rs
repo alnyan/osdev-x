@@ -1,8 +1,7 @@
 //! AArch64 Generic Timer
-use core::sync::atomic::AtomicU64;
 
-use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0, MPIDR_EL1, SP_EL0};
-use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
+use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0};
+use tock_registers::interfaces::{ReadWriteable, Writeable};
 
 use crate::{
     arch::PLATFORM,

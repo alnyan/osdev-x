@@ -1,12 +1,11 @@
 //! Utilities for debug information logging
 use core::fmt::{self, Arguments};
 
-use spinning_top::Spinlock;
-
 use crate::{
     arch::PLATFORM,
     device::{serial::SerialDevice, Platform},
-    util::{IrqSafeSpinlock, OneTimeInit},
+    sync::IrqSafeSpinlock,
+    util::OneTimeInit,
 };
 
 /// Defines the severity of the message

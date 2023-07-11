@@ -1,43 +1,11 @@
 //! Synchronization utilities
 use core::{
     cell::UnsafeCell,
-    mem::{ManuallyDrop, MaybeUninit},
-    ops::{Deref, DerefMut},
+    mem::MaybeUninit,
+    ops::Deref,
     panic,
-    sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
 };
-
-use aarch64_cpu::registers::DAIF;
-use spinning_top::lock_api::RawMutex;
-use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
-
-use crate::arch::aarch64::intrinsics;
-
-pub struct SpinFence {
-    value: AtomicUsize,
-}
-
-struct SpinlockInner<T> {
-    value: UnsafeCell<T>,
-    holder: AtomicUsize,
-    state: AtomicBool,
-}
-
-struct SpinlockInnerGuard<'a, T> {
-    lock: &'a SpinlockInner<T>,
-}
-
-struct IrqGuard(u64);
-
-pub struct IrqSafeSpinlock<T> {
-    inner: SpinlockInner<T>,
-}
-
-pub struct IrqSafeSpinlockGuard<'a, T> {
-    // Must come first to ensure the lock is dropped first and only then IRQs are re-enabled
-    inner: SpinlockInnerGuard<'a, T>,
-    irq_state: IrqGuard,
-}
 
 /// Statically-allocated "dynamic" vector
 pub struct StaticVector<T, const N: usize> {
@@ -51,9 +19,6 @@ pub struct OneTimeInit<T> {
     value: UnsafeCell<MaybeUninit<T>>,
     state: AtomicBool,
 }
-
-unsafe impl<T> Sync for IrqSafeSpinlock<T> {}
-unsafe impl<T> Send for IrqSafeSpinlock<T> {}
 
 unsafe impl<T> Sync for OneTimeInit<T> {}
 unsafe impl<T> Send for OneTimeInit<T> {}
@@ -148,124 +113,5 @@ impl<T, const N: usize> Deref for StaticVector<T, N> {
 
     fn deref(&self) -> &Self::Target {
         unsafe { MaybeUninit::slice_assume_init_ref(&self.data[..self.len]) }
-    }
-}
-
-impl<T> SpinlockInner<T> {
-    pub const fn new(value: T) -> Self {
-        Self {
-            value: UnsafeCell::new(value),
-            holder: AtomicUsize::new(0),
-            state: AtomicBool::new(false),
-        }
-    }
-
-    pub fn lock_track(&self, holder: usize) -> SpinlockInnerGuard<T> {
-        // Loop until the lock can be acquired
-        while self
-            .state
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-            .is_err()
-        {
-            core::hint::spin_loop();
-        }
-
-        self.holder.store(holder, Ordering::SeqCst);
-
-        SpinlockInnerGuard { lock: self }
-    }
-}
-
-impl<T> IrqSafeSpinlock<T> {
-    pub const fn new(value: T) -> Self {
-        Self {
-            inner: SpinlockInner::new(value),
-        }
-    }
-
-    pub fn lock(&self) -> IrqSafeSpinlockGuard<T> {
-        let mut caller;
-        unsafe {
-            core::arch::asm!("mov {0}, lr", out(reg) caller);
-        }
-
-        // Disable IRQs to avoid IRQ handler trying to acquire the same lock
-        let irq_state = IrqGuard(DAIF.get());
-        DAIF.modify(DAIF::I::SET);
-
-        // Acquire the inner lock
-        let inner = self.inner.lock_track(caller);
-
-        IrqSafeSpinlockGuard { inner, irq_state }
-    }
-}
-
-impl<'a, T> Deref for SpinlockInnerGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.lock.value.get() }
-    }
-}
-
-impl<'a, T> DerefMut for SpinlockInnerGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *self.lock.value.get() }
-    }
-}
-
-impl<'a, T> Drop for SpinlockInnerGuard<'a, T> {
-    fn drop(&mut self) {
-        self.lock.holder.store(0, Ordering::SeqCst);
-        self.lock
-            .state
-            .compare_exchange(true, false, Ordering::Release, Ordering::Relaxed)
-            .unwrap();
-    }
-}
-
-impl<'a, T> Deref for IrqSafeSpinlockGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.inner.deref()
-    }
-}
-
-impl<'a, T> DerefMut for IrqSafeSpinlockGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner.deref_mut()
-    }
-}
-
-impl Drop for IrqGuard {
-    fn drop(&mut self) {
-        DAIF.set(self.0);
-    }
-}
-
-impl SpinFence {
-    pub const fn new() -> Self {
-        Self {
-            value: AtomicUsize::new(0),
-        }
-    }
-
-    pub fn reset(&self) {
-        self.value.store(0, Ordering::Release);
-    }
-
-    pub fn signal(&self) {
-        self.value.fetch_add(1, Ordering::SeqCst);
-    }
-
-    pub fn wait_all(&self, count: usize) {
-        while self.value.load(Ordering::Acquire) < count {
-            aarch64_cpu::asm::nop();
-        }
-    }
-
-    pub fn wait_one(&self) {
-        self.wait_all(1);
     }
 }

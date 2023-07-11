@@ -1,5 +1,4 @@
 //! ARM PL011 driver
-use spinning_top::Spinlock;
 use tock_registers::{
     interfaces::{ReadWriteable, Readable, Writeable},
     register_bitfields, register_structs,
@@ -11,7 +10,8 @@ use crate::{
     arch::{aarch64::gic::IrqNumber, PLATFORM},
     device::{interrupt::InterruptSource, Device, Platform},
     mem::device::DeviceMemoryIo,
-    util::{IrqSafeSpinlock, OneTimeInit},
+    sync::IrqSafeSpinlock,
+    util::OneTimeInit,
 };
 
 register_bitfields! {

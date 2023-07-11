@@ -1,4 +1,5 @@
 //! AArch64 architecture and platforms implementation
+
 use aarch64_cpu::registers::{ID_AA64MMFR0_EL1, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1};
 use plat_qemu::PLATFORM;
 use tock_registers::interfaces::{ReadWriteable, Readable};
@@ -13,7 +14,7 @@ use crate::{
         phys::{self, reserved::reserve_region, PageUsage, PhysicalMemoryRegion},
         ConvertAddress,
     },
-    sched,
+    task,
     util::OneTimeInit,
 };
 
@@ -153,9 +154,9 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
         let dt = ARCHITECTURE.dt.get();
         smp::start_ap_cores(dt);
 
-        sched::init();
+        task::init();
 
         // Initialize and enter the scheduler
-        sched::enter();
+        task::enter();
     }
 }
