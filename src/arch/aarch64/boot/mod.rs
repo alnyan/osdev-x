@@ -17,7 +17,7 @@ use crate::{
     arch::PLATFORM,
     device::{Architecture, Platform},
     mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
-    sched::{self, CoreScheduler},
+    sched::{self},
 };
 
 fn __aarch64_common_lower_entry() {

@@ -153,6 +153,8 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
         let dt = ARCHITECTURE.dt.get();
         smp::start_ap_cores(dt);
 
+        sched::init();
+
         // Initialize and enter the scheduler
         sched::enter();
     }

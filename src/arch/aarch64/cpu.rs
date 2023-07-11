@@ -1,15 +1,14 @@
 use aarch64_cpu::registers::{MPIDR_EL1, TPIDR_EL1};
 use alloc::boxed::Box;
-use spinning_top::Spinlock;
 use tock_registers::interfaces::{Readable, Writeable};
 
-use crate::{sched::CoreScheduler, util::OneTimeInit};
+use crate::{sched::CpuQueue, util::OneTimeInit};
 
 #[repr(C, align(0x10))]
 pub struct Cpu {
     id: u32,
 
-    scheduler: OneTimeInit<CoreScheduler>,
+    queue: OneTimeInit<&'static CpuQueue>,
 }
 
 impl Cpu {
@@ -28,17 +27,17 @@ impl Cpu {
     pub unsafe fn init_local() {
         let this = Box::new(Cpu {
             id: Self::local_id(),
-            scheduler: OneTimeInit::new(),
+            queue: OneTimeInit::new(),
         });
         TPIDR_EL1.set(Box::into_raw(this) as _);
     }
 
-    pub fn init_scheduler(&self, sched: CoreScheduler) {
-        self.scheduler.init(sched);
+    pub fn init_scheduler(&self, queue: &'static CpuQueue) {
+        self.queue.init(queue);
     }
 
-    pub fn scheduler(&self) -> &CoreScheduler {
-        self.scheduler.get()
+    pub fn queue(&self) -> &'static CpuQueue {
+        self.queue.get()
     }
 
     #[inline(always)]

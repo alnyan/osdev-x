@@ -1,4 +1,4 @@
-use core::arch::global_asm;
+use core::{arch::global_asm, cell::UnsafeCell};
 
 use crate::mem::{
     phys::{self, PageUsage},
@@ -12,10 +12,16 @@ pub struct ContextStack {
 }
 
 #[repr(C, align(0x10))]
-pub struct TaskContext {
+struct TaskContextInner {
     // 0x00
-    pub sp: usize,
+    sp: usize,
 }
+
+pub struct TaskContext {
+    inner: UnsafeCell<TaskContextInner>,
+}
+
+unsafe impl Sync for TaskContext {}
 
 impl ContextStack {
     pub fn new(base: usize, size: usize) -> Self {
@@ -82,21 +88,23 @@ impl TaskContext {
 
         // TODO stack is leaked
 
-        Self { sp }
+        Self {
+            inner: UnsafeCell::new(TaskContextInner { sp }),
+        }
     }
 
-    pub unsafe fn enter(to: *mut TaskContext) -> ! {
-        __aarch64_enter_task(to)
+    pub unsafe fn enter(&self) -> ! {
+        __aarch64_enter_task(self.inner.get())
     }
 
-    pub unsafe fn switch(to: *mut TaskContext, from: *mut TaskContext) {
-        __aarch64_switch_task(to, from)
+    pub unsafe fn switch(&self, from: &Self) {
+        __aarch64_switch_task(self.inner.get(), from.inner.get())
     }
 }
 
 extern "C" {
-    fn __aarch64_enter_task(to: *mut TaskContext) -> !;
-    fn __aarch64_switch_task(to: *mut TaskContext, from: *mut TaskContext);
+    fn __aarch64_enter_task(to: *mut TaskContextInner) -> !;
+    fn __aarch64_switch_task(to: *mut TaskContextInner, from: *mut TaskContextInner);
     fn __aarch64_task_enter_kernel();
 }
 

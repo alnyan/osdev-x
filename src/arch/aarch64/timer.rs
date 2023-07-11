@@ -34,7 +34,7 @@ impl InterruptSource for ArmTimer {
         CNTP_TVAL_EL0.set(TICK_INTERVAL);
 
         unsafe {
-            Cpu::local().scheduler().yield_cpu();
+            Cpu::local().queue().yield_cpu();
         }
     }
 
