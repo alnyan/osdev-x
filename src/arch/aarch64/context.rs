@@ -1,9 +1,13 @@
 //! AArch64-specific task context implementation
 use core::{arch::global_asm, cell::UnsafeCell};
 
-use crate::mem::{
-    phys::{self, PageUsage},
-    ConvertAddress,
+use crate::{
+    absolute_address,
+    arch::{aarch64::table::KERNEL_TABLES, Architecture, ARCHITECTURE},
+    mem::{
+        phys::{self, PageUsage},
+        ConvertAddress,
+    },
 };
 
 struct StackBuilder {
@@ -21,6 +25,8 @@ struct TaskContextInner {
 pub struct TaskContext {
     inner: UnsafeCell<TaskContextInner>,
 }
+
+const COMMON_CONTEXT_SIZE: usize = 8 * 14;
 
 unsafe impl Sync for TaskContext {}
 
@@ -53,7 +59,10 @@ impl StackBuilder {
         self.sp
     }
 
-    fn init_common(&mut self, entry: usize) {
+    fn init_common(&mut self, entry: usize, ttbr0: usize) {
+        self.push(ttbr0); // ttbr0_el1
+        self.push(0); // tpidr_el0
+
         self.push(entry); // x30/lr
         self.push(0); // x29
         self.push(0); // x28
@@ -83,11 +92,32 @@ impl TaskContext {
         stack.push(entry as _);
         stack.push(arg);
 
-        stack.init_common(__aarch64_task_enter_kernel as _);
+        stack.init_common(__aarch64_task_enter_kernel as _, 0);
 
         let sp = stack.build();
 
         // TODO stack is leaked
+
+        Self {
+            inner: UnsafeCell::new(TaskContextInner { sp }),
+        }
+    }
+
+    pub fn user(entry: usize, arg: usize, ttbr0: usize, user_stack_sp: usize) -> Self {
+        const USER_TASK_PAGES: usize = 4;
+        let stack_base =
+            unsafe { phys::alloc_pages_contiguous(USER_TASK_PAGES, PageUsage::Used).virtualize() };
+
+        let mut stack = StackBuilder::new(stack_base, USER_TASK_PAGES * 0x1000);
+
+        stack.push(entry as _);
+        stack.push(arg);
+        stack.push(0);
+        stack.push(user_stack_sp);
+
+        stack.init_common(__aarch64_task_enter_user as _, ttbr0);
+
+        let sp = stack.build();
 
         Self {
             inner: UnsafeCell::new(TaskContextInner { sp }),
@@ -117,6 +147,7 @@ extern "C" {
     fn __aarch64_enter_task(to: *mut TaskContextInner) -> !;
     fn __aarch64_switch_task(to: *mut TaskContextInner, from: *mut TaskContextInner);
     fn __aarch64_task_enter_kernel();
+    fn __aarch64_task_enter_user();
 }
 
-global_asm!(include_str!("context.S"));
+global_asm!(include_str!("context.S"), context_size = const COMMON_CONTEXT_SIZE);

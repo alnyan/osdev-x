@@ -7,7 +7,7 @@ use crate::{
     absolute_address,
     mem::{
         phys::reserved::{is_reserved, reserve_region},
-        KERNEL_PHYS_BASE,
+        ConvertAddress, KERNEL_PHYS_BASE,
     },
     util::OneTimeInit,
 };
@@ -148,7 +148,10 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
 
     let pages_array_base =
         find_contiguous_region(it.clone(), (pages_array_size + 0xFFF) / 0x1000).unwrap();
-    debugln!("Placing page tracking at {:#x}", pages_array_base);
+    debugln!(
+        "Placing page tracking at {:#x}",
+        pages_array_base.virtualize()
+    );
 
     reserve_region(
         "pages",
@@ -158,7 +161,8 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
         },
     );
 
-    let mut manager = PhysicalMemoryManager::new(phys_start, pages_array_base, pages_array_size);
+    let mut manager =
+        PhysicalMemoryManager::new(phys_start, pages_array_base.virtualize(), pages_array_size);
     let mut page_count = 0;
 
     for region in it {

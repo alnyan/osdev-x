@@ -7,7 +7,7 @@ use aarch64_cpu::{
     registers::{DAIF, ID_AA64MMFR0_EL1, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1},
 };
 use plat_qemu::PLATFORM;
-use tock_registers::interfaces::{ReadWriteable, Readable};
+use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use crate::{
     absolute_address,
@@ -153,6 +153,10 @@ impl AArch64 {
 pub fn kernel_main(dtb_phys: usize) -> ! {
     // NOTE it is critical that the code does not panic until the debug is set up, otherwise no
     // message will be displayed
+
+    // Unmap TTBR0
+    TTBR0_EL1.set(0);
+
     unsafe {
         AArch64::set_interrupt_mask(true);
 
@@ -170,7 +174,7 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
 
         // Setup heap
         let heap_base = phys::alloc_pages_contiguous(16, PageUsage::Used);
-        heap::init_heap(heap_base, 16 * 0x1000);
+        heap::init_heap(heap_base.virtualize(), 16 * 0x1000);
 
         Cpu::init_local();
 

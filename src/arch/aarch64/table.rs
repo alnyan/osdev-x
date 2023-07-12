@@ -7,6 +7,7 @@ use core::{
 use bitflags::bitflags;
 
 use crate::mem::{
+    phys::{self, PageUsage},
     table::{EntryLevel, NextPageTable},
     ConvertAddress, KERNEL_VIRT_OFFSET,
 };
@@ -15,7 +16,7 @@ use crate::mem::{
 #[derive(Clone)]
 #[repr(C, align(0x1000))]
 pub struct AddressSpace {
-    l1: PageTable<L1>,
+    l1: *mut PageTable<L1>,
 }
 
 /// Page table representing a single level of address translation
@@ -26,14 +27,19 @@ pub struct PageTable<L: EntryLevel> {
 }
 
 /// Translation level 1: Entry is 1GiB page/table
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct L1;
 /// Translation level 2: Entry is 2MiB page/table
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct L2;
 /// Translation level 3: Entry is 4KiB page
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct L3;
+
+pub trait NonTerminalEntryLevel: EntryLevel {}
+
+impl NonTerminalEntryLevel for L1 {}
+impl NonTerminalEntryLevel for L2 {}
 
 bitflags! {
     /// TODO split attrs for different translation levels
@@ -54,6 +60,8 @@ bitflags! {
         /// (Must be set) For page/block mappings, indicates to the hardware that the page is
         /// accessed
         const ACCESS = 1 << 10;
+
+        const AP_BOTH_READWRITE = 1 << 6;
     }
 }
 
@@ -111,7 +119,7 @@ impl PageEntry<L3> {
     }
 }
 
-impl PageEntry<L2> {
+impl<T: NonTerminalEntryLevel> PageEntry<T> {
     /// Creates a 2MiB page mapping
     pub fn block(phys: usize, attrs: PageAttributes) -> Self {
         Self(
@@ -132,28 +140,15 @@ impl PageEntry<L2> {
             PhantomData,
         )
     }
-}
 
-impl PageEntry<L1> {
-    /// Creates a 1GiB page mapping
-    pub fn block(phys: usize, attrs: PageAttributes) -> Self {
-        Self(
-            (phys as u64)
-                | (PageAttributes::BLOCK
-                    | PageAttributes::PRESENT
-                    | PageAttributes::ACCESS
-                    | attrs)
-                    .bits(),
-            PhantomData,
-        )
-    }
-
-    /// Creates a mapping pointing to the next-level translation table
-    pub fn table(phys: usize, attrs: PageAttributes) -> Self {
-        Self(
-            (phys as u64) | (PageAttributes::TABLE | PageAttributes::PRESENT | attrs).bits(),
-            PhantomData,
-        )
+    pub fn as_table(self) -> Option<usize> {
+        if self.0 & (PageAttributes::TABLE | PageAttributes::PRESENT).bits()
+            == (PageAttributes::TABLE | PageAttributes::PRESENT).bits()
+        {
+            Some((self.0 & !0xFFF) as usize)
+        } else {
+            None
+        }
     }
 }
 
@@ -175,12 +170,24 @@ impl<L: EntryLevel> PageEntry<L> {
 impl NextPageTable for PageTable<L1> {
     type NextLevel = PageTable<L2>;
 
-    fn get_mut(&mut self, _index: usize) -> Option<&mut Self::NextLevel> {
-        todo!()
+    fn get_mut(&mut self, index: usize) -> Option<&'static mut Self::NextLevel> {
+        let entry = self[index];
+
+        entry
+            .as_table()
+            .map(|addr| unsafe { &mut *(addr.virtualize() as *mut Self::NextLevel) })
     }
 
-    fn get_mut_or_alloc(&mut self, _index: usize) -> &mut Self::NextLevel {
-        todo!()
+    fn get_mut_or_alloc(&mut self, index: usize) -> &'static mut Self::NextLevel {
+        let entry = self[index];
+
+        if let Some(table) = entry.as_table() {
+            unsafe { &mut *(table.virtualize() as *mut Self::NextLevel) }
+        } else {
+            let table = PageTable::new_zeroed();
+            self[index] = PageEntry::<L1>::table(table.physical_address(), PageAttributes::empty());
+            table
+        }
     }
 }
 
@@ -191,8 +198,16 @@ impl NextPageTable for PageTable<L2> {
         todo!()
     }
 
-    fn get_mut_or_alloc(&mut self, _index: usize) -> &mut Self::NextLevel {
-        todo!()
+    fn get_mut_or_alloc(&mut self, index: usize) -> &mut Self::NextLevel {
+        let entry = self[index];
+
+        if let Some(table) = entry.as_table() {
+            todo!()
+        } else {
+            let table = PageTable::new_zeroed();
+            self[index] = PageEntry::<L2>::table(table.physical_address(), PageAttributes::empty());
+            table
+        }
     }
 }
 
@@ -202,6 +217,15 @@ impl<L: EntryLevel> PageTable<L> {
         Self {
             data: [PageEntry::INVALID; 512],
         }
+    }
+
+    pub fn new_zeroed() -> &'static mut Self {
+        let page = unsafe { phys::alloc_page(PageUsage::Used).virtualize() };
+        let table = unsafe { &mut *(page as *mut Self) };
+        for i in 0..512 {
+            table[i] = PageEntry::INVALID;
+        }
+        table
     }
 
     /// Returns a physical address pointing to this page table
@@ -244,23 +268,74 @@ impl FixedTables {
 
     /// Maps a physical memory region as device memory and returns its allocated base address
     pub fn map_device_pages(&mut self, phys: usize, count: usize) -> usize {
-        if count > 512 {
+        if count > 512 * 512 {
             panic!("Unsupported device memory mapping size");
-        } else if count > 1 {
+        } else if count > 512 {
             // 2MiB mappings
             todo!();
         } else {
             // 4KiB mappings
-            if self.device_l3i == 512 {
+            if self.device_l3i + count > 512 {
                 panic!("Out of device memory");
             }
 
             let virt = DEVICE_VIRT_OFFSET + (self.device_l3i << 12);
-            self.device_l3[self.device_l3i] = PageEntry::page(phys, PageAttributes::empty());
-            self.device_l3i += 1;
+            for i in 0..count {
+                self.device_l3[self.device_l3i + i] =
+                    PageEntry::page(phys + i * 0x1000, PageAttributes::empty());
+            }
+            self.device_l3i += count;
+
+            tlb_flush_vaae1(virt);
 
             virt
         }
+    }
+}
+
+impl AddressSpace {
+    pub fn empty() -> Self {
+        let l1 = unsafe { phys::alloc_page(PageUsage::Used).virtualize() as *mut PageTable<L1> };
+
+        for i in 0..512 {
+            unsafe {
+                (*l1)[i] = PageEntry::INVALID;
+            }
+        }
+
+        Self { l1 }
+    }
+
+    unsafe fn as_mut(&self) -> &'static mut PageTable<L1> {
+        self.l1.as_mut().unwrap()
+    }
+
+    pub fn map_page(&self, virt: usize, phys: usize, attrs: PageAttributes) {
+        let l1i = L1::index(virt);
+        let l2i = L2::index(virt);
+        let l3i = L3::index(virt);
+
+        let l2 = unsafe { self.as_mut().get_mut_or_alloc(l1i) };
+        let l3 = l2.get_mut_or_alloc(l2i);
+
+        debugln!(
+            "[{:#x}] map {:#x} -> {:#x}",
+            self.physical_address(),
+            virt,
+            phys
+        );
+
+        l3[l3i] = PageEntry::page(phys, attrs);
+    }
+
+    pub fn physical_address(&self) -> usize {
+        unsafe { (self.l1 as usize).physicalize() }
+    }
+}
+
+fn tlb_flush_vaae1(page: usize) {
+    unsafe {
+        core::arch::asm!("tlbi vaae1, {addr}", addr = in(reg) page);
     }
 }
 
