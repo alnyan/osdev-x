@@ -1,5 +1,5 @@
 [config]
-default_to_workspace = true
+default_to_workspace = false
 
 [env]
 QEMU = { value = "qemu-system-aarch64", condition = { env_not_set = ["QEMU"] } }

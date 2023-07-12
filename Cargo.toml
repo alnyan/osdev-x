@@ -14,3 +14,8 @@ linked_list_allocator = "0.10.5"
 spinning_top = "0.2.5"
 static_assertions = "1.1.0"
 tock-registers = "0.8.1"
+
+abi = { path = "lib/abi" }
+
+[workspace]
+members = ["lib/syscall", "lib/abi"]

@@ -9,6 +9,7 @@ use crate::{
     debug::LogLevel,
     device::{interrupt::IrqContext, Platform},
     panic::panic_secondary,
+    syscall::raw_syscall_handler,
 };
 
 /// Struct for register values saved when taking an exception
@@ -48,9 +49,7 @@ pub fn init_exceptions() {
     VBAR_EL1.set(vbar as u64);
 }
 
-#[no_mangle]
-extern "C" fn __aa64_exc_sync_handler(frame: *mut ExceptionFrame) {
-    let frame = unsafe { &*frame };
+fn dump_irrecoverable_exception(frame: &ExceptionFrame, ec: u64, iss: u64) {
     let cpu = Cpu::get_local();
 
     log_print_raw!(LogLevel::Fatal, "SYNC exception:\n");
@@ -69,9 +68,6 @@ extern "C" fn __aa64_exc_sync_handler(frame: *mut ExceptionFrame) {
         }
     }
 
-    let esr_el1 = ESR_EL1.get();
-    let iss = esr_el1 & 0x1FFFFFF;
-    let ec = (esr_el1 >> 26) & 0x3F;
     match ec {
         // Data abort from lower level
         0b100100 => {
@@ -111,8 +107,30 @@ extern "C" fn __aa64_exc_sync_handler(frame: *mut ExceptionFrame) {
 
         _ => (),
     }
+}
 
-    panic!("Irrecoverable exception");
+#[no_mangle]
+extern "C" fn __aa64_exc_sync_handler(frame: *mut ExceptionFrame) {
+    let frame = unsafe { &mut *frame };
+
+    let esr_el1 = ESR_EL1.get();
+    let ec = (esr_el1 >> 26) & 0x3F;
+
+    match ec {
+        // SVC in AArch64
+        0b010101 => {
+            let func = frame.r[0];
+            let args = &frame.r[1..6];
+            let result = raw_syscall_handler(func, args);
+            frame.r[0] = result;
+        }
+        _ => {
+            let iss = esr_el1 & 0x1FFFFFF;
+            dump_irrecoverable_exception(frame, ec, iss);
+
+            panic!("Irrecoverable exception");
+        }
+    }
 }
 
 #[no_mangle]

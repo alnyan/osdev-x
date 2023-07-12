@@ -3,6 +3,9 @@ PROFILE := env_var_or_default('PROFILE', 'development')
 _default:
     @just --list
 
+clean:
+    cargo clean
+
 doc:
     cargo make doc
 

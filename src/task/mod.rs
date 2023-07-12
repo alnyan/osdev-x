@@ -7,6 +7,7 @@ use tock_registers::interfaces::Readable;
 
 use crate::{
     arch::aarch64::{context::TaskContext, cpu::Cpu, smp::CPU_COUNT},
+    kernel_main,
     sync::{IrqSafeSpinlock, SpinFence},
     task::sched::CpuQueue,
 };
@@ -71,17 +72,8 @@ pub fn init() {
     // Create a queue for each CPU
     sched::init_queues(Vec::from_iter((0..cpu_count).map(|_| CpuQueue::new())));
 
-    // Spawn a closure
-    let some_value = 1234;
-    spawn_kernel_closure(move || {
-        use crate::arch::{Architecture, ArchitectureImpl};
-
-        debugln!("some_value = {}", some_value);
-
-        loop {
-            ArchitectureImpl::wait_for_interrupt();
-        }
-    });
+    // Spawn kernel main task
+    spawn_kernel_closure(kernel_main);
 }
 
 /// Sets up the local CPU queue and switches to some task in it for execution.
