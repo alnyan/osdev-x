@@ -7,11 +7,6 @@ use tock_registers::interfaces::Readable;
 
 use crate::{
     arch::aarch64::{context::TaskContext, cpu::Cpu, smp::CPU_COUNT},
-    mem::{
-        phys::{self, PageUsage},
-        table::{AddressSpace, PageAttributes},
-        ConvertAddress,
-    },
     sync::{IrqSafeSpinlock, SpinFence},
     task::sched::CpuQueue,
 };
@@ -63,55 +58,10 @@ impl ProcessList {
 /// Global shared process list
 pub static PROCESSES: IrqSafeSpinlock<ProcessList> = IrqSafeSpinlock::new(ProcessList::new());
 
-fn func1(_x: usize) {
-    for _ in 0..100000 {
-        aarch64_cpu::asm::nop();
-    }
-}
-
-extern "C" fn __task(x: usize) -> ! {
-    loop {
-        debugln!("__task {}", x);
-        func1(x);
-    }
-}
-
-// static USER_CODE: &[u32] = &[0x14000000];
-
-extern "C" fn stats_thread(_x: usize) -> ! {
-    let mut counter = 0;
-    let this = Process::current();
-    let pid = this.id();
-
-    loop {
-        for _ in 0..1000000 {
-            aarch64_cpu::asm::nop();
-        }
-
-        {
-            debugln!("+++ STATS +++");
-            for (i, queue) in CpuQueue::all().enumerate() {
-                let mut lock = queue.lock();
-                let total = lock.stats.idle_time + lock.stats.cpu_time;
-                if total != 0 {
-                    debugln!(
-                        "[cpu{}] idle = {}%, cpu = {}%, qsize = {}, current = {}",
-                        i,
-                        lock.stats.idle_time * 100 / total,
-                        lock.stats.cpu_time * 100 / total,
-                        lock.queue.len(),
-                        lock.current.is_some()
-                    );
-                } else {
-                    debugln!("[cpu{}] N/A", i);
-                }
-
-                lock.stats.reset();
-            }
-            debugln!("--- STATS ---");
-        }
-        counter += 1;
-    }
+/// Creates a new kernel-space process to execute a closure and queues it to some CPU
+pub fn spawn_kernel_closure<F: Fn() + Send + 'static>(f: F) {
+    let proc = Process::new_with_context(TaskContext::kernel_closure(f));
+    proc.enqueue_somewhere();
 }
 
 /// Sets up CPU queues and gives them some processes to run
@@ -121,50 +71,17 @@ pub fn init() {
     // Create a queue for each CPU
     sched::init_queues(Vec::from_iter((0..cpu_count).map(|_| CpuQueue::new())));
 
-    // Spawn and enqueue some processes
-    // for i in 0..12 {
-    //     let proc = Process::new_with_context(TaskContext::kernel(__task, i));
-    //     proc.enqueue_somewhere();
-    // }
+    // Spawn a closure
+    let some_value = 1234;
+    spawn_kernel_closure(move || {
+        use crate::arch::{Architecture, ArchitectureImpl};
 
-    let space = AddressSpace::empty();
+        debugln!("some_value = {}", some_value);
 
-    let user_code = 0x100000;
-    let user_stack = 0x200000;
-
-    let user_code_phys = phys::alloc_page(PageUsage::Used);
-
-    let user_stack_phys = phys::alloc_page(PageUsage::Used);
-
-    unsafe {
-        let write = (user_code_phys as *mut u32).virtualize();
-
-        write.add(0).write_volatile(0xD10023FF);
-        write.add(1).write_volatile(0xF90003FF);
-        write.add(2).write_volatile(0x14000000);
-    }
-
-    space.map_page(user_code, user_code_phys, PageAttributes::AP_BOTH_READWRITE);
-    space.map_page(
-        user_stack,
-        user_stack_phys,
-        PageAttributes::AP_BOTH_READWRITE,
-    );
-
-    debugln!("space = {:#x}", space.physical_address());
-    let proc = Process::new_with_context(TaskContext::user(
-        user_code,
-        0,
-        space.physical_address(),
-        user_stack + 0x1000,
-    ));
-
-    let q0 = CpuQueue::all().next().unwrap();
-    proc.enqueue_to(q0);
-
-    // Spawn kernel stats thread
-    let proc = Process::new_with_context(TaskContext::kernel(stats_thread, 0));
-    proc.enqueue_to(q0);
+        loop {
+            ArchitectureImpl::wait_for_interrupt();
+        }
+    });
 }
 
 /// Sets up the local CPU queue and switches to some task in it for execution.

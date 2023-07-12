@@ -46,5 +46,6 @@ static GLOBAL_HEAP: KernelAllocator = KernelAllocator::empty();
 ///
 /// The caller must ensure the range is valid and mapped virtual memory.
 pub unsafe fn init_heap(heap_base: usize, heap_size: usize) {
+    debugln!("Heap: {:#x}..{:#x}", heap_base, heap_base + heap_size);
     GLOBAL_HEAP.init(heap_base, heap_size);
 }

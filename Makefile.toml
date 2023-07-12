@@ -73,3 +73,7 @@ args = ["doc"]
 [tasks.clippy]
 command = "cargo"
 args = ["clippy", "@@split(CARGO_OPTS, ,remove-empty)"]
+
+[tasks.check]
+command = "cargo"
+args = ["check", "@@split(CARGO_OPTS, ,remove-empty)"]

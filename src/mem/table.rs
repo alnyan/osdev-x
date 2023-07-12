@@ -8,14 +8,14 @@ pub trait NextPageTable {
 
     /// Tries looking up a next-level table at given index, allocating and mapping one if it is not
     /// present there
-    fn get_mut_or_alloc(&mut self, index: usize) -> &mut Self::NextLevel;
+    fn get_mut_or_alloc(&mut self, index: usize) -> &'static mut Self::NextLevel;
     /// Returns a mutable reference to a next-level table at `index`, if present
-    fn get_mut(&mut self, index: usize) -> Option<&mut Self::NextLevel>;
+    fn get_mut(&mut self, index: usize) -> Option<&'static mut Self::NextLevel>;
 }
 
 /// Interface for a single level of address translation
 #[const_trait]
-pub trait EntryLevel: Clone {
+pub trait EntryLevel: Copy {
     /// Returns the index into a page table for a given address
     fn index(addr: usize) -> usize;
     /// Returns the offset of an address from the page start at current level

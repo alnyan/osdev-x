@@ -157,7 +157,7 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
         "pages",
         PhysicalMemoryRegion {
             base: pages_array_base,
-            size: (pages_array_size + 0xFFF) / 0x1000,
+            size: (pages_array_size + 0xFFF) & !0xFFF,
         },
     );
 

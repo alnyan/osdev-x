@@ -1,3 +1,5 @@
+PROFILE := env_var_or_default('PROFILE', 'development')
+
 _default:
     @just --list
 
@@ -7,11 +9,14 @@ doc:
 clippy:
     cargo make clippy
 
+check:
+    cargo make check
+
 qemu:
-    cargo make qemu
+    cargo make --profile={{PROFILE}} qemu
 
 build:
-    cargo make kernel-bin
+    cargo make --profile={{PROFILE}} kernel-bin
 
 gdb:
-    cargo make qemu-gdb
+    cargo make --profile={{PROFILE}} qemu-gdb

@@ -34,7 +34,12 @@ pub trait Architecture {
     /// Suspends CPU until an interrupt is received
     fn wait_for_interrupt();
 
-    /// Sets the local CPU's interrupt mask
+    /// Sets the local CPU's interrupt mask.
+    ///
+    /// # Safety
+    ///
+    /// Enabling interrupts may lead to unexpected behavior unless the context explicitly expects
+    /// them.
     unsafe fn set_interrupt_mask(mask: bool);
 
     /// Returns the local CPU's interrupt mask

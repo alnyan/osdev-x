@@ -1,6 +1,8 @@
 //! AArch64-specific task context implementation
 use core::{arch::global_asm, cell::UnsafeCell};
 
+use alloc::boxed::Box;
+
 use crate::mem::{
     phys::{self, PageUsage},
     ConvertAddress,
@@ -75,7 +77,8 @@ impl StackBuilder {
 }
 
 impl TaskContext {
-    /// Constructs a kernel thread context
+    /// Constructs a kernel thread context. For a more convenient way of constructing kernel
+    /// processes, see [TaskContext::kernel_closure()].
     pub fn kernel(entry: extern "C" fn(usize) -> !, arg: usize) -> Self {
         const KERNEL_TASK_PAGES: usize = 4;
         let stack_base = unsafe {
@@ -97,6 +100,18 @@ impl TaskContext {
         Self {
             inner: UnsafeCell::new(TaskContextInner { sp }),
         }
+    }
+
+    /// Constructs a safe wrapper process to execute a kernel-space closure
+    pub fn kernel_closure<F: FnOnce() + Send + 'static>(f: F) -> Self {
+        extern "C" fn closure_wrapper<F: FnOnce() + Send + 'static>(closure_addr: usize) -> ! {
+            let closure = unsafe { Box::from_raw(closure_addr as *mut F) };
+            closure();
+            todo!("Process termination");
+        }
+
+        let closure = Box::new(f);
+        Self::kernel(closure_wrapper::<F>, Box::into_raw(closure) as usize)
     }
 
     /// Constructs a user thread context. The caller is responsible for allocating the userspace

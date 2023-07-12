@@ -37,10 +37,17 @@ pub struct L2;
 pub struct L3;
 
 /// Tag trait to mark that the page table level may point to a next-level table
-pub trait NonTerminalEntryLevel: EntryLevel {}
+pub trait NonTerminalEntryLevel: EntryLevel {
+    /// Tag type of the level this entry level may point to
+    type NextLevel: EntryLevel;
+}
 
-impl NonTerminalEntryLevel for L1 {}
-impl NonTerminalEntryLevel for L2 {}
+impl NonTerminalEntryLevel for L1 {
+    type NextLevel = L2;
+}
+impl NonTerminalEntryLevel for L2 {
+    type NextLevel = L3;
+}
 
 bitflags! {
     /// TODO split attrs for different translation levels
@@ -171,8 +178,8 @@ impl<L: EntryLevel> PageEntry<L> {
     }
 }
 
-impl NextPageTable for PageTable<L1> {
-    type NextLevel = PageTable<L2>;
+impl<L: NonTerminalEntryLevel> NextPageTable for PageTable<L> {
+    type NextLevel = PageTable<L::NextLevel>;
 
     fn get_mut(&mut self, index: usize) -> Option<&'static mut Self::NextLevel> {
         let entry = self[index];
@@ -189,27 +196,7 @@ impl NextPageTable for PageTable<L1> {
             unsafe { &mut *(table.virtualize() as *mut Self::NextLevel) }
         } else {
             let table = PageTable::new_zeroed();
-            self[index] = PageEntry::<L1>::table(table.physical_address(), PageAttributes::empty());
-            table
-        }
-    }
-}
-
-impl NextPageTable for PageTable<L2> {
-    type NextLevel = PageTable<L3>;
-
-    fn get_mut(&mut self, _index: usize) -> Option<&mut Self::NextLevel> {
-        todo!()
-    }
-
-    fn get_mut_or_alloc(&mut self, index: usize) -> &mut Self::NextLevel {
-        let entry = self[index];
-
-        if let Some(table) = entry.as_table() {
-            todo!()
-        } else {
-            let table = PageTable::new_zeroed();
-            self[index] = PageEntry::<L2>::table(table.physical_address(), PageAttributes::empty());
+            self[index] = PageEntry::<L>::table(table.physical_address(), PageAttributes::empty());
             table
         }
     }
