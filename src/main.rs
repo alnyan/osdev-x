@@ -12,7 +12,7 @@
 #![no_std]
 #![no_main]
 
-use abi::{SyscallArgument, SyscallFunction};
+use task::process::Process;
 
 extern crate alloc;
 
@@ -36,14 +36,9 @@ pub mod util;
 /// This function is meant to be used as a kernel-space process after all the platform-specific
 /// initialization has finished.
 pub fn kernel_main() {
-    let mut x0 = SyscallFunction::DoSomething.repr();
-    let x1 = 123usize.as_syscall_argument();
-    let x2 = 321usize.as_syscall_argument();
-    unsafe {
-        core::arch::asm!("svc #0", inout("x0") x0, in("x1") x1, in("x2") x2);
-    }
-    debugln!("Result: {}", x0);
+    Process::current().exit(0);
     loop {
+        debugln!("TEST");
         aarch64_cpu::asm::nop();
     }
 }

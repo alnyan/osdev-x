@@ -74,7 +74,7 @@ impl CpuQueueInner {
                     return Some(task);
                 }
                 // Drop suspended tasks from the queue
-                ProcessState::Suspended => (),
+                ProcessState::Suspended | ProcessState::Terminated => (),
                 e => panic!("Unexpected process state in CpuQueue: {:?}", e),
             }
         }
@@ -134,6 +134,9 @@ impl CpuQueue {
         let current = inner.current.clone();
 
         if let Some(current) = current.as_ref() {
+            if current.state() != ProcessState::Terminated {
+                current.set_state(ProcessState::Ready);
+            }
             inner.queue.push_back(current.clone());
 
             inner.stats.cpu_time += delta;
@@ -155,6 +158,7 @@ impl CpuQueue {
         };
 
         let (to, _to_rc) = if let Some(next) = next.as_ref() {
+            next.set_state(ProcessState::Running);
             (next.context(), Rc::strong_count(next))
         } else {
             (&self.idle, 0)

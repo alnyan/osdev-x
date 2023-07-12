@@ -21,6 +21,8 @@ pub enum ProcessState {
     Running,
     /// Process is present in a global list, but is not queued for execution until it is resumed
     Suspended,
+    /// Process is terminated and waits to be reaped
+    Terminated,
 }
 
 /// Process data and state structure
@@ -70,6 +72,10 @@ impl Process {
         self.state.load(Ordering::Acquire)
     }
 
+    pub fn set_state(&self, state: ProcessState) -> ProcessState {
+        self.state.swap(state, Ordering::SeqCst)
+    }
+
     /// Selects a suitable CPU queue and submits the process for execution.
     ///
     /// # Panics
@@ -94,7 +100,7 @@ impl Process {
         let current_state = self.state.swap(ProcessState::Ready, Ordering::SeqCst);
 
         if current_state != ProcessState::Suspended {
-            todo!("Handle attempt to enqueue an already queued/running process");
+            todo!("Handle attempt to enqueue an already queued/running/terminated process");
         }
 
         unsafe {
@@ -123,6 +129,7 @@ impl Process {
             ProcessState::Ready => (),
             // Do nothing, not in a queue already
             ProcessState::Suspended => (),
+            ProcessState::Terminated => panic!("Process is terminated"),
             ProcessState::Running => {
                 todo!("Cannot dequeue self currently");
             }
@@ -139,6 +146,17 @@ impl Process {
     /// running process (e.g. the call itself comes from a process).
     pub fn current() -> Rc<Self> {
         Self::get_current().unwrap()
+    }
+
+    pub fn exit(&self, _status: usize) {
+        let current_state = self.state.swap(ProcessState::Terminated, Ordering::SeqCst);
+
+        match current_state {
+            ProcessState::Suspended => (),
+            ProcessState::Ready => todo!(),
+            ProcessState::Running => unsafe { Cpu::local().queue().yield_cpu() },
+            ProcessState::Terminated => todo!(),
+        }
     }
 }
 
