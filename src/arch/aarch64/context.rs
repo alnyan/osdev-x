@@ -1,13 +1,9 @@
 //! AArch64-specific task context implementation
 use core::{arch::global_asm, cell::UnsafeCell};
 
-use crate::{
-    absolute_address,
-    arch::{aarch64::table::KERNEL_TABLES, Architecture, ARCHITECTURE},
-    mem::{
-        phys::{self, PageUsage},
-        ConvertAddress,
-    },
+use crate::mem::{
+    phys::{self, PageUsage},
+    ConvertAddress,
 };
 
 struct StackBuilder {
@@ -103,6 +99,8 @@ impl TaskContext {
         }
     }
 
+    /// Constructs a user thread context. The caller is responsible for allocating the userspace
+    /// stack and setting up a valid address space for the context.
     pub fn user(entry: usize, arg: usize, ttbr0: usize, user_stack_sp: usize) -> Self {
         const USER_TASK_PAGES: usize = 4;
         let stack_base =

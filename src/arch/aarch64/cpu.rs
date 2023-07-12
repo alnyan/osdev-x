@@ -2,7 +2,7 @@
 use core::sync::atomic::Ordering;
 
 use aarch64_cpu::registers::{MPIDR_EL1, TPIDR_EL1};
-use alloc::{boxed::Box, collections::VecDeque, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use tock_registers::interfaces::{Readable, Writeable};
 
 use crate::{arch::CpuMessage, sync::IrqSafeSpinlock, task::sched::CpuQueue, util::OneTimeInit};
@@ -86,16 +86,23 @@ impl Cpu {
         (MPIDR_EL1.get() & 0xFF) as _
     }
 
+    /// Inserts an IPI message to the back of the target CPU's message queue
     pub fn push_ipi_queue(cpu_id: u32, msg: CpuMessage) {
         let ipi_queue = &IPI_QUEUES.get()[cpu_id as usize];
         ipi_queue.push(msg);
     }
 
+    /// Pops the first IPI message received for this CPU.
+    ///
+    /// # Note
+    ///
+    /// Currently the queue consists of only one entry, so the CPU will only receive the last one.
     pub fn get_ipi(&self) -> Option<CpuMessage> {
         let ipi_queue = &IPI_QUEUES.get()[self.id as usize];
         ipi_queue.pop()
     }
 
+    /// Sets up global list of interprocessor message queues
     pub fn init_ipi_queues() {
         IPI_QUEUES.init(Vec::from_iter(
             (0..CPU_COUNT.load(Ordering::Acquire)).map(|_| IpiQueue::new()),

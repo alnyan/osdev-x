@@ -2,10 +2,7 @@
 
 use core::sync::atomic::Ordering;
 
-use aarch64_cpu::{
-    asm::barrier,
-    registers::{DAIF, ID_AA64MMFR0_EL1, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1},
-};
+use aarch64_cpu::registers::{DAIF, ID_AA64MMFR0_EL1, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1};
 use plat_qemu::PLATFORM;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 

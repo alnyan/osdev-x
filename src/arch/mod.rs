@@ -4,9 +4,11 @@ pub mod aarch64;
 pub use aarch64::plat_qemu::{QemuPlatform as PlatformImpl, PLATFORM};
 pub use aarch64::{AArch64 as ArchitectureImpl, ARCHITECTURE};
 
+/// Describes messages sent from some CPU to others
 #[derive(Clone, Copy, PartialEq, Debug)]
 #[repr(u64)]
 pub enum CpuMessage {
+    /// Indicates that the sender CPU entered kernel panic and wants other CPUs to follow
     Panic,
 }
 

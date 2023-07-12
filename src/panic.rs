@@ -1,3 +1,4 @@
+//! Kernel panic handler code
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
@@ -10,6 +11,7 @@ use crate::{
 // Just a fence to ensure secondary panics don't trash the screen
 static PANIC_FINISHED_FENCE: SpinFence = SpinFence::new();
 
+/// Panic handler for CPUs other than the one that initiated it
 pub fn panic_secondary() -> ! {
     unsafe {
         ArchitectureImpl::set_interrupt_mask(true);

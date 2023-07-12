@@ -142,7 +142,6 @@ pub(super) fn ipi_handler(msg: Option<CpuMessage>) {
         warnln!("Spurious IPI received by cpu{}", Cpu::local_id());
         todo!();
     }
-    loop {}
 }
 
 global_asm!(include_str!("vectors.S"));

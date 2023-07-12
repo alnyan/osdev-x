@@ -1,10 +1,7 @@
 //! Main entry point for the AArch64 platforms
 use core::{arch::asm, sync::atomic::Ordering};
 
-use aarch64_cpu::{
-    asm::barrier,
-    registers::{CurrentEL, CPACR_EL1},
-};
+use aarch64_cpu::registers::{CurrentEL, CPACR_EL1};
 use tock_registers::interfaces::{ReadWriteable, Readable};
 
 use super::{

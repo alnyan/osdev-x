@@ -100,7 +100,7 @@ impl Gicd {
         assert_eq!(interrupt_id & !0xF, 0);
         let value = match target {
             IpiDeliveryTarget::AllExceptLocal => SGIR::TargetListFilter::AllExceptLocal,
-            IpiDeliveryTarget::Specified(mask) => {
+            IpiDeliveryTarget::Specified(_mask) => {
                 // TODO: need to handle self-ipi case, releasing the lock somehow
                 todo!();
             }

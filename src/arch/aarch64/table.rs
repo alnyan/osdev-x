@@ -36,6 +36,7 @@ pub struct L2;
 #[derive(Clone, Copy)]
 pub struct L3;
 
+/// Tag trait to mark that the page table level may point to a next-level table
 pub trait NonTerminalEntryLevel: EntryLevel {}
 
 impl NonTerminalEntryLevel for L1 {}
@@ -61,6 +62,7 @@ bitflags! {
         /// accessed
         const ACCESS = 1 << 10;
 
+        /// For page/block mappings, allows both user and kernel code to read/write to the page
         const AP_BOTH_READWRITE = 1 << 6;
     }
 }
@@ -141,6 +143,8 @@ impl<T: NonTerminalEntryLevel> PageEntry<T> {
         )
     }
 
+    /// Returns the physical address of the table this entry refers to, returning None if it
+    /// does not
     pub fn as_table(self) -> Option<usize> {
         if self.0 & (PageAttributes::TABLE | PageAttributes::PRESENT).bits()
             == (PageAttributes::TABLE | PageAttributes::PRESENT).bits()
@@ -219,6 +223,7 @@ impl<L: EntryLevel> PageTable<L> {
         }
     }
 
+    /// Allocates a new page table, filling it with non-preset entries
     pub fn new_zeroed() -> &'static mut Self {
         let page = unsafe { phys::alloc_page(PageUsage::Used).virtualize() };
         let table = unsafe { &mut *(page as *mut Self) };
@@ -294,6 +299,7 @@ impl FixedTables {
 }
 
 impl AddressSpace {
+    /// Allocates an empty address space with all entries marked as non-present
     pub fn empty() -> Self {
         let l1 = unsafe { phys::alloc_page(PageUsage::Used).virtualize() as *mut PageTable<L1> };
 
@@ -310,6 +316,7 @@ impl AddressSpace {
         self.l1.as_mut().unwrap()
     }
 
+    /// Inserts a single 4KiB virt -> phys mapping into the address apce
     pub fn map_page(&self, virt: usize, phys: usize, attrs: PageAttributes) {
         let l1i = L1::index(virt);
         let l2i = L2::index(virt);
@@ -328,6 +335,7 @@ impl AddressSpace {
         l3[l3i] = PageEntry::page(phys, attrs);
     }
 
+    /// Returns the physical address of the address space (to be used in a TTBRn_ELx)
     pub fn physical_address(&self) -> usize {
         unsafe { (self.l1 as usize).physicalize() }
     }
