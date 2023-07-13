@@ -123,7 +123,7 @@ impl TaskContext {
         ttbr0: usize,
         user_stack_sp: usize,
     ) -> Result<Self, Error> {
-        const USER_TASK_PAGES: usize = 4;
+        const USER_TASK_PAGES: usize = 8;
         let stack_base =
             unsafe { phys::alloc_pages_contiguous(USER_TASK_PAGES, PageUsage::Used)?.virtualize() };
 

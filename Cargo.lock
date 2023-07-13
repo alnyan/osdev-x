@@ -42,6 +42,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
 
 [[package]]
+name = "elf"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2b183d6ce6ca4cf30e3db37abf5b52568b5f9015c97d9fbdd7026aa5dcdd758"
+
+[[package]]
 name = "endian-type-rs"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -78,6 +84,22 @@ dependencies = [
  "rustc_version",
  "static_assertions",
  "unsafe_unwrap",
+]
+
+[[package]]
+name = "kernel"
+version = "0.1.0"
+dependencies = [
+ "aarch64-cpu",
+ "abi",
+ "atomic_enum",
+ "bitflags",
+ "elf",
+ "fdt-rs",
+ "linked_list_allocator",
+ "spinning_top",
+ "static_assertions",
+ "tock-registers",
 ]
 
 [[package]]
@@ -126,21 +148,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "osdev-x"
-version = "0.1.0"
-dependencies = [
- "aarch64-cpu",
- "abi",
- "atomic_enum",
- "bitflags",
- "fdt-rs",
- "linked_list_allocator",
- "spinning_top",
- "static_assertions",
- "tock-registers",
 ]
 
 [[package]]
@@ -223,6 +230,10 @@ version = "0.1.0"
 dependencies = [
  "enum-repr",
 ]
+
+[[package]]
+name = "test_program"
+version = "0.1.0"
 
 [[package]]
 name = "tock-registers"

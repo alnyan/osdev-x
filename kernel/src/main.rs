@@ -12,8 +12,6 @@
 #![no_std]
 #![no_main]
 
-use task::process::Process;
-
 extern crate alloc;
 
 #[macro_use]
@@ -24,6 +22,7 @@ pub mod arch;
 pub mod device;
 pub mod mem;
 pub mod panic;
+pub mod proc;
 pub mod sync;
 pub mod syscall;
 pub mod task;
@@ -36,9 +35,10 @@ pub mod util;
 /// This function is meant to be used as a kernel-space process after all the platform-specific
 /// initialization has finished.
 pub fn kernel_main() {
-    Process::current().exit(0);
     loop {
         debugln!("TEST");
-        aarch64_cpu::asm::nop();
+        for _ in 0..1000000 {
+            aarch64_cpu::asm::nop();
+        }
     }
 }

@@ -9,6 +9,11 @@ use tock_registers::interfaces::Readable;
 use crate::{
     arch::aarch64::{context::TaskContext, cpu::Cpu, smp::CPU_COUNT},
     kernel_main,
+    mem::{
+        phys::{self, PageUsage},
+        table::{AddressSpace, PageAttributes},
+    },
+    proc,
     sync::{IrqSafeSpinlock, SpinFence},
     task::sched::CpuQueue,
 };
@@ -68,6 +73,12 @@ pub fn spawn_kernel_closure<F: Fn() + Send + 'static>(f: F) -> Result<(), Error>
     Ok(())
 }
 
+static USER_PROGRAM: &[u8] = include_bytes!(concat!(
+    "../../../target/aarch64-osdev-none/",
+    env!("PROFILE"),
+    "/test_program"
+));
+
 /// Sets up CPU queues and gives them some processes to run
 pub fn init() -> Result<(), Error> {
     let cpu_count = CPU_COUNT.load(Ordering::Acquire);
@@ -77,6 +88,39 @@ pub fn init() -> Result<(), Error> {
 
     // Spawn kernel main task
     spawn_kernel_closure(kernel_main)?;
+
+    // Spawn a test user task
+    for i in 0..2 {
+        let mut space = AddressSpace::new_empty(i + 1).unwrap();
+        let elf_entry = proc::load_elf_from_memory(&mut space, USER_PROGRAM);
+        infoln!("SETUP TASK {}", i + 1);
+
+        const USER_STACK_PAGES: usize = 8;
+        let virt_stack_base = 0x10000000;
+        for i in 0..USER_STACK_PAGES {
+            let phys = phys::alloc_page(PageUsage::Used).unwrap();
+            space
+                .map_page(
+                    virt_stack_base + i * 0x1000,
+                    phys,
+                    PageAttributes::AP_BOTH_READWRITE,
+                )
+                .unwrap();
+        }
+
+        debugln!("Entry: {:#x}", elf_entry);
+
+        let context = TaskContext::user(
+            elf_entry,
+            i as usize,
+            space.physical_address(),
+            virt_stack_base + USER_STACK_PAGES * 0x1000,
+        )
+        .unwrap();
+
+        let proc = Process::new_with_context(context);
+        proc.enqueue_somewhere();
+    }
 
     Ok(())
 }

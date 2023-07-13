@@ -60,7 +60,28 @@ __aarch64_task_enter_user:
     msr elr_el1, x1
     add sp, sp, #32
 
+    // Zero the registers
     mov x1, xzr
+    mov x2, xzr
+    mov x3, xzr
+    mov x4, xzr
+    mov x5, xzr
+    mov x6, xzr
+    mov x7, xzr
+    mov x8, xzr
+    mov x9, xzr
+    mov x10, xzr
+    mov x11, xzr
+    mov x12, xzr
+    mov x13, xzr
+    mov x14, xzr
+    mov x15, xzr
+    mov x16, xzr
+    mov x17, xzr
+    mov x18, xzr
+
+    mov lr, xzr
+
     eret
 
 __aarch64_switch_task:

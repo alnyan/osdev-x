@@ -115,7 +115,19 @@ impl CpuQueue {
         // Start from idle thread to avoid having a Rc stuck here without getting dropped
         let t = CNTPCT_EL0.get();
         self.lock().stats.measure_time = t;
-        self.idle.enter()
+
+        let mut inner = self.inner.lock();
+        if let Some(proc) = inner.next_ready_task() {
+            inner.queue.push_back(proc.clone());
+            inner.current = Some(proc.clone());
+
+            drop(inner);
+            proc.context().enter();
+        } else {
+            drop(inner);
+
+            self.idle.enter();
+        };
     }
 
     /// Yields CPU execution to the next task in queue (or idle task if there aren't any).
@@ -163,6 +175,22 @@ impl CpuQueue {
         } else {
             (&self.idle, 0)
         };
+
+        // if let Some(from) = current.as_ref() {
+        //     log_print_raw!(crate::debug::LogLevel::Info, "{}", from.id());
+        // } else {
+        //     log_print_raw!(crate::debug::LogLevel::Info, "{{idle}}");
+        // }
+
+        // log_print_raw!(crate::debug::LogLevel::Info, " -> ");
+
+        // if let Some(to) = next.as_ref() {
+        //     log_print_raw!(crate::debug::LogLevel::Info, "{}", to.id());
+        // } else {
+        //     log_print_raw!(crate::debug::LogLevel::Info, "{{idle}}");
+        // }
+
+        // log_print_raw!(crate::debug::LogLevel::Info, "\n");
 
         to.switch(from)
     }

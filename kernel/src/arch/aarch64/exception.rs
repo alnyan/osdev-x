@@ -16,6 +16,7 @@ use crate::{
 #[repr(C)]
 pub struct ExceptionFrame {
     r: [u64; 32],
+    c: [u64; 4],
     // ...
 }
 
@@ -55,6 +56,7 @@ fn dump_irrecoverable_exception(frame: &ExceptionFrame, ec: u64, iss: u64) {
     log_print_raw!(LogLevel::Fatal, "SYNC exception:\n");
     log_print_raw!(LogLevel::Fatal, "FAR: {:#x}\n", FAR_EL1.get());
     log_print_raw!(LogLevel::Fatal, "ELR: {:#x}\n", ELR_EL1.get());
+    log_print_raw!(LogLevel::Fatal, "ESR: {:#x}\n", ESR_EL1.get());
     log_print_raw!(LogLevel::Fatal, "TTBR0_EL1: {:#x}\n", TTBR0_EL1.get());
     log_print_raw!(LogLevel::Fatal, "TTBR1_EL1: {:#x}\n", TTBR1_EL1.get());
     log_print_raw!(LogLevel::Fatal, "Register dump:\n");

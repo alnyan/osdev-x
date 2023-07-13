@@ -1,21 +1,8 @@
-[package]
-name = "osdev-x"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-aarch64-cpu = "9.3.1"
-atomic_enum = "0.2.0"
-bitflags = "2.3.3"
-fdt-rs = { version = "0.4.3", default-features = false }
-linked_list_allocator = "0.10.5"
-spinning_top = "0.2.5"
-static_assertions = "1.1.0"
-tock-registers = "0.8.1"
-
-abi = { path = "lib/abi" }
-
 [workspace]
-members = ["lib/syscall", "lib/abi"]
+members = [
+    "kernel",
+    "usr/test_program",
+
+    "lib/syscall",
+    "lib/abi"
+]

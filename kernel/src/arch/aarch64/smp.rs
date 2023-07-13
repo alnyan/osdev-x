@@ -90,7 +90,7 @@ pub unsafe fn start_ap_cores(dt: &DeviceTree) -> Result<(), Error> {
             reg
         );
 
-        const AP_STACK_PAGES: usize = 2;
+        const AP_STACK_PAGES: usize = 4;
         let stack_pages = phys::alloc_pages_contiguous(AP_STACK_PAGES, PageUsage::Used)?;
         debugln!(
             "{} stack: {:#x}..{:#x}",

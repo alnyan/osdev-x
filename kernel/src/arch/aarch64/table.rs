@@ -18,6 +18,7 @@ use crate::mem::{
 #[repr(C, align(0x1000))]
 pub struct AddressSpace {
     l1: *mut PageTable<L1>,
+    asid: u8,
 }
 
 /// Page table representing a single level of address translation
@@ -72,6 +73,8 @@ bitflags! {
 
         /// For page/block mappings, allows both user and kernel code to read/write to the page
         const AP_BOTH_READWRITE = 1 << 6;
+        /// For page/block mappings, only allows read access for EL0/EL1
+        const AP_BOTH_READONLY = 3 << 6;
     }
 }
 
@@ -126,6 +129,18 @@ impl PageEntry<L3> {
                     .bits(),
             PhantomData,
         )
+    }
+
+    /// Returns the physical address of the page this entry refers to, returning None if it does
+    /// not
+    pub fn as_page(self) -> Option<usize> {
+        let mask = (PageAttributes::PRESENT | PageAttributes::PAGE).bits();
+
+        if self.0 & mask == mask {
+            Some((self.0 & !0xFFF) as usize)
+        } else {
+            None
+        }
     }
 }
 
@@ -288,7 +303,7 @@ impl FixedTables {
 
 impl AddressSpace {
     /// Allocates an empty address space with all entries marked as non-present
-    pub fn empty() -> Result<Self, Error> {
+    pub fn new_empty(asid: u8) -> Result<Self, Error> {
         let l1 = unsafe { phys::alloc_page(PageUsage::Used)?.virtualize() as *mut PageTable<L1> };
 
         for i in 0..512 {
@@ -297,11 +312,24 @@ impl AddressSpace {
             }
         }
 
-        Ok(Self { l1 })
+        Ok(Self { l1, asid })
     }
 
     unsafe fn as_mut(&self) -> &'static mut PageTable<L1> {
         self.l1.as_mut().unwrap()
+    }
+
+    // TODO return page size and attributes
+    /// Returns the physical address to which the `virt` address is mapped
+    pub fn translate(&self, virt: usize) -> Option<usize> {
+        let l1i = L1::index(virt);
+        let l2i = L2::index(virt);
+        let l3i = L3::index(virt);
+
+        let l2 = unsafe { self.as_mut().get_mut(l1i) }?;
+        let l3 = l2.get_mut(l2i)?;
+
+        l3[l3i].as_page()
     }
 
     /// Inserts a single 4KiB virt -> phys mapping into the address apce
@@ -327,11 +355,13 @@ impl AddressSpace {
 
     /// Returns the physical address of the address space (to be used in a TTBRn_ELx)
     pub fn physical_address(&self) -> usize {
-        unsafe { (self.l1 as usize).physicalize() }
+        unsafe { (self.l1 as usize).physicalize() | ((self.asid as usize) << 48) }
     }
 }
 
-fn tlb_flush_vaae1(page: usize) {
+/// Flushes the virtual address from TLB
+pub fn tlb_flush_vaae1(page: usize) {
+    assert_eq!(page & 0xFFF, 0);
     unsafe {
         core::arch::asm!("tlbi vaae1, {addr}", addr = in(reg) page);
     }

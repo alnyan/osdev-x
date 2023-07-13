@@ -43,7 +43,7 @@ pub mod smp;
 pub mod table;
 pub mod timer;
 
-pub(self) const BOOT_STACK_SIZE: usize = 32768;
+pub(self) const BOOT_STACK_SIZE: usize = 65536;
 
 #[derive(Clone, Copy)]
 #[repr(C, align(0x20))]
