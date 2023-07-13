@@ -79,7 +79,7 @@ extern "C" fn __aarch64_ap_upper_entry(_x0: usize) -> ! {
 
     // Initialize CPU-local GIC and timer
     unsafe {
-        PLATFORM.init(false);
+        PLATFORM.init(false).expect("AP platform init failed");
 
         Cpu::init_local();
 

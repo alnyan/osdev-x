@@ -1,6 +1,7 @@
 //! AArch64 Generic Timer
 
 use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0};
+use abi::error::Error;
 use tock_registers::interfaces::{ReadWriteable, Writeable};
 
 use crate::{
@@ -23,27 +24,32 @@ impl Device for ArmTimer {
         "ARM Generic Timer"
     }
 
-    unsafe fn init(&self) {
+    unsafe fn init(&self) -> Result<(), Error> {
         CNTP_CTL_EL0.write(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::SET);
+        Ok(())
     }
 }
 
 impl InterruptSource for ArmTimer {
-    fn handle_irq(&self) {
+    fn handle_irq(&self) -> Result<(), Error> {
         CNTP_TVAL_EL0.set(TICK_INTERVAL);
 
         unsafe {
             Cpu::local().queue().yield_cpu();
         }
+
+        Ok(())
     }
 
-    unsafe fn init_irq(&'static self) {
+    unsafe fn init_irq(&'static self) -> Result<(), Error> {
         let intc = PLATFORM.interrupt_controller();
 
-        intc.register_handler(self.irq, self);
+        intc.register_handler(self.irq, self)?;
         CNTP_CTL_EL0.modify(CNTP_CTL_EL0::IMASK::CLEAR);
         CNTP_TVAL_EL0.set(TICK_INTERVAL);
-        intc.enable_irq(self.irq);
+        intc.enable_irq(self.irq)?;
+
+        Ok(())
     }
 }
 

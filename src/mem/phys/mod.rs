@@ -1,6 +1,7 @@
 //! Physical memory management facilities
 use core::{iter::StepBy, mem::size_of, ops::Range};
 
+use abi::error::Error;
 use spinning_top::Spinlock;
 
 use crate::{
@@ -66,12 +67,12 @@ impl PhysicalMemoryRegion {
 pub static PHYSICAL_MEMORY: OneTimeInit<Spinlock<PhysicalMemoryManager>> = OneTimeInit::new();
 
 /// Allocates a single physical page from the global manager
-pub fn alloc_page(usage: PageUsage) -> usize {
+pub fn alloc_page(usage: PageUsage) -> Result<usize, Error> {
     PHYSICAL_MEMORY.get().lock().alloc_page(usage)
 }
 
 /// Allocates a contiguous range of physical pages from the global manager
-pub fn alloc_pages_contiguous(count: usize, usage: PageUsage) -> usize {
+pub fn alloc_pages_contiguous(count: usize, usage: PageUsage) -> Result<usize, Error> {
     PHYSICAL_MEMORY
         .get()
         .lock()
@@ -135,7 +136,9 @@ fn find_contiguous_region<I: Iterator<Item = PhysicalMemoryRegion>>(
 ///
 /// The caller must ensure this function has not been called before and that the regions
 /// are valid and actually available.
-pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(it: I) {
+pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(
+    it: I,
+) -> Result<(), Error> {
     let (phys_start, phys_end) = physical_memory_range(it.clone()).unwrap();
     let total_count = (phys_end - phys_start) / 0x1000;
     let pages_array_size = total_count * size_of::<Page>();
@@ -146,8 +149,9 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
     // Reserve memory regions from which allocation is forbidden
     reserve_region("kernel", kernel_physical_memory_region());
 
-    let pages_array_base =
-        find_contiguous_region(it.clone(), (pages_array_size + 0xFFF) / 0x1000).unwrap();
+    let pages_array_base = find_contiguous_region(it.clone(), (pages_array_size + 0xFFF) / 0x1000)
+        .ok_or(Error::OutOfMemory)?;
+
     debugln!(
         "Placing page tracking at {:#x}",
         pages_array_base.virtualize()
@@ -179,6 +183,7 @@ pub unsafe fn init_from_iter<I: Iterator<Item = PhysicalMemoryRegion> + Clone>(i
     infoln!("{} available pages", page_count);
 
     PHYSICAL_MEMORY.init(Spinlock::new(manager));
+    Ok(())
 }
 
 fn kernel_physical_memory_region() -> PhysicalMemoryRegion {

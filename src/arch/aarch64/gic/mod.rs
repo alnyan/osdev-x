@@ -2,6 +2,7 @@
 use core::sync::atomic::Ordering;
 
 use aarch64_cpu::asm::barrier;
+use abi::error::Error;
 use spinning_top::Spinlock;
 
 use crate::{
@@ -62,11 +63,11 @@ impl Device for Gic {
         "ARM Generic Interrupt Controller v2"
     }
 
-    unsafe fn init(&self) {
-        let gicd_mmio = DeviceMemory::map("GICv2 Distributor registers", self.gicd_base, 0x1000);
+    unsafe fn init(&self) -> Result<(), Error> {
+        let gicd_mmio = DeviceMemory::map("GICv2 Distributor registers", self.gicd_base, 0x1000)?;
         let gicd_mmio_shared = DeviceMemoryIo::new(gicd_mmio.clone());
         let gicd_mmio_banked = DeviceMemoryIo::new(gicd_mmio);
-        let gicc_mmio = DeviceMemoryIo::map("GICv2 CPU registers", self.gicc_base);
+        let gicc_mmio = DeviceMemoryIo::map("GICv2 CPU registers", self.gicc_base)?;
 
         let gicd = Gicd::new(gicd_mmio_shared, gicd_mmio_banked);
         let gicc = Gicc::new(gicc_mmio);
@@ -76,14 +77,17 @@ impl Device for Gic {
 
         self.gicd.init(gicd);
         self.gicc.init(gicc);
+
+        Ok(())
     }
 }
 
 impl InterruptController for Gic {
     type IrqNumber = IrqNumber;
 
-    fn enable_irq(&self, irq: Self::IrqNumber) {
+    fn enable_irq(&self, irq: Self::IrqNumber) -> Result<(), Error> {
         self.gicd.get().enable_irq(irq);
+        Ok(())
     }
 
     fn handle_pending_irqs<'irq>(&'irq self, ic: &crate::device::interrupt::IrqContext<'irq>) {
@@ -108,7 +112,7 @@ impl InterruptController for Gic {
                 None => panic!("No IRQ handler registered for irq{}", irq_number),
                 Some(handler) => {
                     drop(table);
-                    handler.handle_irq();
+                    handler.handle_irq().expect("IRQ handler failed");
                 }
             }
         }
@@ -118,18 +122,20 @@ impl InterruptController for Gic {
         &self,
         irq: Self::IrqNumber,
         handler: &'static (dyn InterruptSource + Sync),
-    ) {
+    ) -> Result<(), Error> {
         let mut table = self.irq_table.lock();
         let irq = irq.get();
         if table[irq].is_some() {
-            todo!();
+            return Err(Error::AlreadyExists);
         }
 
         debugln!("Bound irq{} to {:?}", irq, Device::name(handler));
         table[irq] = Some(handler);
+
+        Ok(())
     }
 
-    unsafe fn send_ipi(&self, target: IpiDeliveryTarget, msg: CpuMessage) {
+    unsafe fn send_ipi(&self, target: IpiDeliveryTarget, msg: CpuMessage) -> Result<(), Error> {
         // TODO message queue insertion should be moved
         match target {
             IpiDeliveryTarget::AllExceptLocal => {
@@ -148,6 +154,8 @@ impl InterruptController for Gic {
         barrier::isb(barrier::SY);
 
         self.gicd.get().set_sgir(target, IPI_VECTOR);
+
+        Ok(())
     }
 }
 
@@ -172,7 +180,8 @@ impl Gic {
     /// # Safety
     ///
     /// Must not be called more than once per each AP. Must not be called from BSP.
-    pub unsafe fn init_smp_ap(&self) {
+    pub unsafe fn init_smp_ap(&self) -> Result<(), Error> {
         self.gicc.get().init();
+        Ok(())
     }
 }

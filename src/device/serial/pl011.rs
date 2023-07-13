@@ -1,4 +1,5 @@
 //! ARM PL011 driver
+use abi::error::Error;
 use tock_registers::{
     interfaces::{ReadWriteable, Readable, Writeable},
     register_bitfields, register_structs,
@@ -84,15 +85,17 @@ impl SerialDevice for Pl011 {
 }
 
 impl InterruptSource for Pl011 {
-    unsafe fn init_irq(&'static self) {
+    unsafe fn init_irq(&'static self) -> Result<(), Error> {
         let intc = PLATFORM.interrupt_controller();
 
-        intc.register_handler(self.irq, self);
+        intc.register_handler(self.irq, self)?;
         self.inner.get().lock().regs.IMSC.modify(IMSC::RXIM::SET);
-        intc.enable_irq(self.irq);
+        intc.enable_irq(self.irq)?;
+
+        Ok(())
     }
 
-    fn handle_irq(&self) {
+    fn handle_irq(&self) -> Result<(), Error> {
         let inner = self.inner.get().lock();
         inner.regs.ICR.write(ICR::ALL::CLEAR);
 
@@ -100,17 +103,20 @@ impl InterruptSource for Pl011 {
         drop(inner);
 
         debugln!("Got byte {:#x}", byte);
+
+        Ok(())
     }
 }
 
 impl Device for Pl011 {
-    unsafe fn init(&self) {
+    unsafe fn init(&self) -> Result<(), Error> {
         let mut inner = Pl011Inner {
-            regs: DeviceMemoryIo::map("pl011 UART", self.base),
+            regs: DeviceMemoryIo::map("pl011 UART", self.base)?,
         };
         inner.init();
 
         self.inner.init(IrqSafeSpinlock::new(inner));
+        Ok(())
     }
 
     fn name(&self) -> &'static str {

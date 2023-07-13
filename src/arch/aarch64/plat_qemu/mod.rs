@@ -1,5 +1,6 @@
 //! Qemu's "virt" platform implementation for AArch64
 use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0};
+use abi::error::Error;
 use tock_registers::interfaces::Writeable;
 
 use crate::device::{
@@ -25,26 +26,28 @@ impl Platform for QemuPlatform {
 
     const KERNEL_PHYS_BASE: usize = 0x40080000;
 
-    unsafe fn init(&'static self, is_bsp: bool) {
+    unsafe fn init(&'static self, is_bsp: bool) -> Result<(), Error> {
         if is_bsp {
-            self.gic.init();
+            self.gic.init()?;
 
-            self.pl011.init_irq();
+            self.pl011.init_irq()?;
 
-            self.local_timer.init();
-            self.local_timer.init_irq();
+            self.local_timer.init()?;
+            self.local_timer.init_irq()?;
         } else {
-            self.gic.init_smp_ap();
+            self.gic.init_smp_ap()?;
 
             // TODO somehow merge this with the rest of the code
             CNTP_CTL_EL0.write(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
             CNTP_TVAL_EL0.set(10000000);
-            self.gic.enable_irq(IrqNumber::new(30));
+            self.gic.enable_irq(IrqNumber::new(30))?;
         }
+
+        Ok(())
     }
 
     unsafe fn init_primary_serial(&self) {
-        self.pl011.init();
+        self.pl011.init().ok();
     }
 
     fn name(&self) -> &'static str {

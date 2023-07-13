@@ -92,7 +92,7 @@ impl CpuQueueInner {
 impl CpuQueue {
     /// Constructs an empty queue with its own idle task
     pub fn new() -> Self {
-        let idle = TaskContext::kernel(__idle, 0);
+        let idle = TaskContext::kernel(__idle, 0).expect("Could not construct an idle task");
 
         Self {
             inner: {

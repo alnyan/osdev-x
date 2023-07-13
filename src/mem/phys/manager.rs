@@ -1,6 +1,8 @@
 //! Physical memory manager implementation
 use core::mem::size_of;
 
+use abi::error::Error;
+
 use super::{Page, PageUsage};
 
 /// Physical memory management interface
@@ -34,22 +36,26 @@ impl PhysicalMemoryManager {
     }
 
     /// Allocates a single page, marking it as used with `usage`
-    pub fn alloc_page(&mut self, usage: PageUsage) -> usize {
+    pub fn alloc_page(&mut self, usage: PageUsage) -> Result<usize, Error> {
         assert_ne!(usage, PageUsage::Available);
         assert_ne!(usage, PageUsage::Reserved);
 
         for index in 0..self.pages.len() {
             if self.pages[index].usage == PageUsage::Available {
                 self.pages[index].usage = PageUsage::Used;
-                return index * 4096 + self.offset;
+                return Ok(index * 4096 + self.offset);
             }
         }
 
-        panic!();
+        Err(Error::OutOfMemory)
     }
 
     /// Allocates a contiguous range of physical pages, marking it as used with `usage`
-    pub fn alloc_contiguous_pages(&mut self, count: usize, usage: PageUsage) -> usize {
+    pub fn alloc_contiguous_pages(
+        &mut self,
+        count: usize,
+        usage: PageUsage,
+    ) -> Result<usize, Error> {
         assert_ne!(usage, PageUsage::Available);
         assert_ne!(usage, PageUsage::Reserved);
         assert_ne!(count, 0);
@@ -66,10 +72,10 @@ impl PhysicalMemoryManager {
                 page.usage = usage;
                 page.refcount = 1;
             }
-            return self.offset + i * 0x1000;
+            return Ok(self.offset + i * 0x1000);
         }
 
-        panic!("Out of memory");
+        Err(Error::OutOfMemory)
     }
 
     /// Marks a previously reserved page as available.

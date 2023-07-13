@@ -4,6 +4,7 @@ use core::{
     ops::{Index, IndexMut},
 };
 
+use abi::error::Error;
 use bitflags::bitflags;
 
 use crate::mem::{
@@ -189,15 +190,15 @@ impl<L: NonTerminalEntryLevel> NextPageTable for PageTable<L> {
             .map(|addr| unsafe { &mut *(addr.virtualize() as *mut Self::NextLevel) })
     }
 
-    fn get_mut_or_alloc(&mut self, index: usize) -> &'static mut Self::NextLevel {
+    fn get_mut_or_alloc(&mut self, index: usize) -> Result<&'static mut Self::NextLevel, Error> {
         let entry = self[index];
 
         if let Some(table) = entry.as_table() {
-            unsafe { &mut *(table.virtualize() as *mut Self::NextLevel) }
+            Ok(unsafe { &mut *(table.virtualize() as *mut Self::NextLevel) })
         } else {
-            let table = PageTable::new_zeroed();
+            let table = PageTable::new_zeroed()?;
             self[index] = PageEntry::<L>::table(table.physical_address(), PageAttributes::empty());
-            table
+            Ok(table)
         }
     }
 }
@@ -211,13 +212,13 @@ impl<L: EntryLevel> PageTable<L> {
     }
 
     /// Allocates a new page table, filling it with non-preset entries
-    pub fn new_zeroed() -> &'static mut Self {
-        let page = unsafe { phys::alloc_page(PageUsage::Used).virtualize() };
+    pub fn new_zeroed() -> Result<&'static mut Self, Error> {
+        let page = unsafe { phys::alloc_page(PageUsage::Used)?.virtualize() };
         let table = unsafe { &mut *(page as *mut Self) };
         for i in 0..512 {
             table[i] = PageEntry::INVALID;
         }
-        table
+        Ok(table)
     }
 
     /// Returns a physical address pointing to this page table
@@ -259,7 +260,7 @@ impl FixedTables {
     }
 
     /// Maps a physical memory region as device memory and returns its allocated base address
-    pub fn map_device_pages(&mut self, phys: usize, count: usize) -> usize {
+    pub fn map_device_pages(&mut self, phys: usize, count: usize) -> Result<usize, Error> {
         if count > 512 * 512 {
             panic!("Unsupported device memory mapping size");
         } else if count > 512 {
@@ -268,7 +269,7 @@ impl FixedTables {
         } else {
             // 4KiB mappings
             if self.device_l3i + count > 512 {
-                panic!("Out of device memory");
+                return Err(Error::OutOfMemory);
             }
 
             let virt = DEVICE_VIRT_OFFSET + (self.device_l3i << 12);
@@ -280,15 +281,15 @@ impl FixedTables {
 
             tlb_flush_vaae1(virt);
 
-            virt
+            Ok(virt)
         }
     }
 }
 
 impl AddressSpace {
     /// Allocates an empty address space with all entries marked as non-present
-    pub fn empty() -> Self {
-        let l1 = unsafe { phys::alloc_page(PageUsage::Used).virtualize() as *mut PageTable<L1> };
+    pub fn empty() -> Result<Self, Error> {
+        let l1 = unsafe { phys::alloc_page(PageUsage::Used)?.virtualize() as *mut PageTable<L1> };
 
         for i in 0..512 {
             unsafe {
@@ -296,7 +297,7 @@ impl AddressSpace {
             }
         }
 
-        Self { l1 }
+        Ok(Self { l1 })
     }
 
     unsafe fn as_mut(&self) -> &'static mut PageTable<L1> {
@@ -304,13 +305,13 @@ impl AddressSpace {
     }
 
     /// Inserts a single 4KiB virt -> phys mapping into the address apce
-    pub fn map_page(&self, virt: usize, phys: usize, attrs: PageAttributes) {
+    pub fn map_page(&self, virt: usize, phys: usize, attrs: PageAttributes) -> Result<(), Error> {
         let l1i = L1::index(virt);
         let l2i = L2::index(virt);
         let l3i = L3::index(virt);
 
-        let l2 = unsafe { self.as_mut().get_mut_or_alloc(l1i) };
-        let l3 = l2.get_mut_or_alloc(l2i);
+        let l2 = unsafe { self.as_mut().get_mut_or_alloc(l1i) }?;
+        let l3 = l2.get_mut_or_alloc(l2i)?;
 
         debugln!(
             "[{:#x}] map {:#x} -> {:#x}",
@@ -320,6 +321,8 @@ impl AddressSpace {
         );
 
         l3[l3i] = PageEntry::page(phys, attrs);
+
+        Ok(())
     }
 
     /// Returns the physical address of the address space (to be used in a TTBRn_ELx)

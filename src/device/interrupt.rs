@@ -1,6 +1,8 @@
 //! Interrupt-related interfaces
 use core::marker::PhantomData;
 
+use abi::error::Error;
+
 use crate::arch::CpuMessage;
 
 use super::Device;
@@ -21,10 +23,10 @@ pub trait InterruptSource: Device {
     /// # Safety
     ///
     /// The caller must ensure the function hasn't been called before.
-    unsafe fn init_irq(&'static self);
+    unsafe fn init_irq(&'static self) -> Result<(), Error>;
 
     /// Handles the interrupt raised by the device
-    fn handle_irq(&self);
+    fn handle_irq(&self) -> Result<(), Error>;
 }
 
 /// Interface for a device responsible for routing and handling IRQs
@@ -37,10 +39,10 @@ pub trait InterruptController: Device {
         &self,
         irq: Self::IrqNumber,
         handler: &'static (dyn InterruptSource + Sync),
-    );
+    ) -> Result<(), Error>;
 
     /// Enables given interrupt number/vector
-    fn enable_irq(&self, irq: Self::IrqNumber);
+    fn enable_irq(&self, irq: Self::IrqNumber) -> Result<(), Error>;
 
     /// Handles all pending interrupts on this controller
     fn handle_pending_irqs<'irq>(&'irq self, ic: &IrqContext<'irq>);
@@ -55,7 +57,7 @@ pub trait InterruptController: Device {
     /// # Safety
     ///
     /// As the call may alter the flow of execution on CPUs, this function is unsafe.
-    unsafe fn send_ipi(&self, target: IpiDeliveryTarget, msg: CpuMessage);
+    unsafe fn send_ipi(&self, target: IpiDeliveryTarget, msg: CpuMessage) -> Result<(), Error>;
 }
 
 /// Token type to indicate that the code is being run from an interrupt handler

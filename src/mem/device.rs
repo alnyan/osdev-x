@@ -1,6 +1,8 @@
 //! Facilities for mapping devices to virtual address space
 use core::{marker::PhantomData, mem::size_of, ops::Deref};
 
+use abi::error::Error;
+
 use crate::arch::{Architecture, ARCHITECTURE};
 
 /// Generic MMIO access mapping
@@ -26,14 +28,14 @@ impl DeviceMemory {
     /// The caller is responsible for making sure the (phys, size) range is valid and actually
     /// points to some device's MMIO. The caller must also make sure no aliasing for that range is
     /// possible.
-    pub unsafe fn map(name: &'static str, phys: usize, size: usize) -> Self {
+    pub unsafe fn map(name: &'static str, phys: usize, size: usize) -> Result<Self, Error> {
         if size > 0x1000 {
             todo!("Device memory mappings larger than 4K");
         }
 
-        let base = ARCHITECTURE.map_device_pages(phys, 1);
+        let base = ARCHITECTURE.map_device_pages(phys, 1)?;
 
-        Self { name, base, size }
+        Ok(Self { name, base, size })
     }
 }
 
@@ -45,11 +47,8 @@ impl<T> DeviceMemoryIo<T> {
     ///
     /// The caller is responsible for making sure the `phys` address points to a MMIO region which
     /// is at least `size_of::<T>()` and no aliasing for that region is possible.
-    pub unsafe fn map(name: &'static str, phys: usize) -> Self {
-        Self {
-            mmio: DeviceMemory::map(name, phys, size_of::<T>()),
-            _pd: PhantomData,
-        }
+    pub unsafe fn map(name: &'static str, phys: usize) -> Result<Self, Error> {
+        DeviceMemory::map(name, phys, size_of::<T>()).map(|t| Self::new(t))
     }
 
     /// Constructs a device MMIO wrapper from given [DeviceMemory] mapping.

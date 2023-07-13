@@ -4,6 +4,7 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use abi::error::Error;
 use fdt_rs::prelude::PropReader;
 
 use crate::{
@@ -62,7 +63,7 @@ impl Psci {
 ///
 /// The caller must ensure the physical memory manager was initialized, virtual memory tables are
 /// set up and the function has not been called before.
-pub unsafe fn start_ap_cores(dt: &DeviceTree) {
+pub unsafe fn start_ap_cores(dt: &DeviceTree) -> Result<(), Error> {
     let cpus = dt.node_by_path("/cpus").unwrap();
     let psci = Psci::new();
 
@@ -90,7 +91,7 @@ pub unsafe fn start_ap_cores(dt: &DeviceTree) {
         );
 
         const AP_STACK_PAGES: usize = 2;
-        let stack_pages = phys::alloc_pages_contiguous(AP_STACK_PAGES, PageUsage::Used);
+        let stack_pages = phys::alloc_pages_contiguous(AP_STACK_PAGES, PageUsage::Used)?;
         debugln!(
             "{} stack: {:#x}..{:#x}",
             cpu.name().unwrap(),
@@ -112,6 +113,8 @@ pub unsafe fn start_ap_cores(dt: &DeviceTree) {
 
         debugln!("{} is up", cpu.name().unwrap());
     }
+
+    Ok(())
 }
 
 #[naked]

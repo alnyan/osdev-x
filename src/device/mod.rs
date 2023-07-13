@@ -1,4 +1,6 @@
 //! Device management and interfaces
+use abi::error::Error;
+
 use self::{interrupt::InterruptController, serial::SerialDevice};
 
 pub mod interrupt;
@@ -11,7 +13,7 @@ pub trait Device {
     /// # Safety
     ///
     /// Unsafe to call if the device has already been initialized.
-    unsafe fn init(&self);
+    unsafe fn init(&self) -> Result<(), Error>;
 
     /// Returns a display name for the device
     fn name(&self) -> &'static str;
@@ -30,7 +32,7 @@ pub trait Platform {
     /// # Safety
     ///
     /// Unsafe to call if the platform has already been initialized.
-    unsafe fn init(&'static self, is_bsp: bool);
+    unsafe fn init(&'static self, is_bsp: bool) -> Result<(), Error>;
     /// Initializes the primary serial device to provide the debugging output as early as possible.
     ///
     /// # Safety

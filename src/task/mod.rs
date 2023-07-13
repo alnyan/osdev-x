@@ -2,6 +2,7 @@
 use core::sync::atomic::Ordering;
 
 use aarch64_cpu::registers::MPIDR_EL1;
+use abi::error::Error;
 use alloc::{rc::Rc, vec::Vec};
 use tock_registers::interfaces::Readable;
 
@@ -60,20 +61,24 @@ impl ProcessList {
 pub static PROCESSES: IrqSafeSpinlock<ProcessList> = IrqSafeSpinlock::new(ProcessList::new());
 
 /// Creates a new kernel-space process to execute a closure and queues it to some CPU
-pub fn spawn_kernel_closure<F: Fn() + Send + 'static>(f: F) {
-    let proc = Process::new_with_context(TaskContext::kernel_closure(f));
+pub fn spawn_kernel_closure<F: Fn() + Send + 'static>(f: F) -> Result<(), Error> {
+    let proc = Process::new_with_context(TaskContext::kernel_closure(f)?);
     proc.enqueue_somewhere();
+
+    Ok(())
 }
 
 /// Sets up CPU queues and gives them some processes to run
-pub fn init() {
+pub fn init() -> Result<(), Error> {
     let cpu_count = CPU_COUNT.load(Ordering::Acquire);
 
     // Create a queue for each CPU
     sched::init_queues(Vec::from_iter((0..cpu_count).map(|_| CpuQueue::new())));
 
     // Spawn kernel main task
-    spawn_kernel_closure(kernel_main);
+    spawn_kernel_closure(kernel_main)?;
+
+    Ok(())
 }
 
 /// Sets up the local CPU queue and switches to some task in it for execution.

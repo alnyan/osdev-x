@@ -41,7 +41,8 @@ fn panic_handler(pi: &core::panic::PanicInfo) -> ! {
         unsafe {
             PLATFORM
                 .interrupt_controller()
-                .send_ipi(IpiDeliveryTarget::AllExceptLocal, CpuMessage::Panic);
+                .send_ipi(IpiDeliveryTarget::AllExceptLocal, CpuMessage::Panic)
+                .ok();
         }
 
         log_print_raw!(LogLevel::Fatal, "--- BEGIN PANIC ---\n");

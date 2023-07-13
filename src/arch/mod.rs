@@ -3,6 +3,7 @@ pub mod aarch64;
 
 pub use aarch64::plat_qemu::{QemuPlatform as PlatformImpl, PLATFORM};
 pub use aarch64::{AArch64 as ArchitectureImpl, ARCHITECTURE};
+use abi::error::Error;
 
 /// Describes messages sent from some CPU to others
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -27,7 +28,7 @@ pub trait Architecture {
     unsafe fn init_mmu(&self, bsp: bool);
 
     /// Allocates a virtual mapping for the specified physical memory region
-    fn map_device_pages(&self, phys: usize, count: usize) -> usize;
+    fn map_device_pages(&self, phys: usize, count: usize) -> Result<usize, Error>;
 
     // Architecture intrinsics
 

@@ -1,6 +1,7 @@
 //! AArch64-specific task context implementation
 use core::{arch::global_asm, cell::UnsafeCell};
 
+use abi::error::Error;
 use alloc::boxed::Box;
 
 use crate::mem::{
@@ -79,10 +80,10 @@ impl StackBuilder {
 impl TaskContext {
     /// Constructs a kernel thread context. For a more convenient way of constructing kernel
     /// processes, see [TaskContext::kernel_closure()].
-    pub fn kernel(entry: extern "C" fn(usize) -> !, arg: usize) -> Self {
+    pub fn kernel(entry: extern "C" fn(usize) -> !, arg: usize) -> Result<Self, Error> {
         const KERNEL_TASK_PAGES: usize = 4;
         let stack_base = unsafe {
-            phys::alloc_pages_contiguous(KERNEL_TASK_PAGES, PageUsage::Used).virtualize()
+            phys::alloc_pages_contiguous(KERNEL_TASK_PAGES, PageUsage::Used)?.virtualize()
         };
 
         let mut stack = StackBuilder::new(stack_base, KERNEL_TASK_PAGES * 0x1000);
@@ -97,13 +98,13 @@ impl TaskContext {
 
         // TODO stack is leaked
 
-        Self {
+        Ok(Self {
             inner: UnsafeCell::new(TaskContextInner { sp }),
-        }
+        })
     }
 
     /// Constructs a safe wrapper process to execute a kernel-space closure
-    pub fn kernel_closure<F: FnOnce() + Send + 'static>(f: F) -> Self {
+    pub fn kernel_closure<F: FnOnce() + Send + 'static>(f: F) -> Result<Self, Error> {
         extern "C" fn closure_wrapper<F: FnOnce() + Send + 'static>(closure_addr: usize) -> ! {
             let closure = unsafe { Box::from_raw(closure_addr as *mut F) };
             closure();
@@ -116,10 +117,15 @@ impl TaskContext {
 
     /// Constructs a user thread context. The caller is responsible for allocating the userspace
     /// stack and setting up a valid address space for the context.
-    pub fn user(entry: usize, arg: usize, ttbr0: usize, user_stack_sp: usize) -> Self {
+    pub fn user(
+        entry: usize,
+        arg: usize,
+        ttbr0: usize,
+        user_stack_sp: usize,
+    ) -> Result<Self, Error> {
         const USER_TASK_PAGES: usize = 4;
         let stack_base =
-            unsafe { phys::alloc_pages_contiguous(USER_TASK_PAGES, PageUsage::Used).virtualize() };
+            unsafe { phys::alloc_pages_contiguous(USER_TASK_PAGES, PageUsage::Used)?.virtualize() };
 
         let mut stack = StackBuilder::new(stack_base, USER_TASK_PAGES * 0x1000);
 
@@ -132,9 +138,9 @@ impl TaskContext {
 
         let sp = stack.build();
 
-        Self {
+        Ok(Self {
             inner: UnsafeCell::new(TaskContextInner { sp }),
-        }
+        })
     }
 
     /// Starts execution of `self` task on local CPU.

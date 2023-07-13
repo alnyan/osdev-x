@@ -3,6 +3,7 @@
 use core::sync::atomic::Ordering;
 
 use aarch64_cpu::registers::{DAIF, ID_AA64MMFR0_EL1, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1};
+use abi::error::Error;
 use plat_qemu::PLATFORM;
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
@@ -89,7 +90,7 @@ impl Architecture for AArch64 {
         SCTLR_EL1.modify(SCTLR_EL1::M::Enable);
     }
 
-    fn map_device_pages(&self, phys: usize, count: usize) -> usize {
+    fn map_device_pages(&self, phys: usize, count: usize) -> Result<usize, Error> {
         unsafe { KERNEL_TABLES.map_device_pages(phys, count) }
     }
 
@@ -130,7 +131,7 @@ impl AArch64 {
         self.dt.get()
     }
 
-    unsafe fn init_physical_memory(&self, dtb_phys: usize) {
+    unsafe fn init_physical_memory(&self, dtb_phys: usize) -> Result<(), Error> {
         let dt = self.device_tree();
 
         reserve_region(
@@ -142,7 +143,7 @@ impl AArch64 {
         );
 
         let regions = FdtMemoryRegionIter::new(dt);
-        phys::init_from_iter(regions);
+        phys::init_from_iter(regions)
     }
 }
 
@@ -167,25 +168,33 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
 
     debugln!("Initializing {} platform", PLATFORM.name());
     unsafe {
-        ARCHITECTURE.init_physical_memory(dtb_phys);
+        ARCHITECTURE
+            .init_physical_memory(dtb_phys)
+            .expect("Failed to initialize the physical memory manager");
 
         // Setup heap
-        let heap_base = phys::alloc_pages_contiguous(16, PageUsage::Used);
+        let heap_base = phys::alloc_pages_contiguous(16, PageUsage::Used)
+            .expect("Could not allocate a block for heap");
         heap::init_heap(heap_base.virtualize(), 16 * 0x1000);
 
         Cpu::init_local();
 
-        PLATFORM.init(true);
+        PLATFORM.init(true).unwrap();
 
         let dt = ARCHITECTURE.dt.get();
-        smp::start_ap_cores(dt);
+        if let Err(e) = smp::start_ap_cores(dt) {
+            errorln!(
+                "Could not initialize AP CPUs: {:?}. Will continue with one CPU.",
+                e
+            );
+        }
 
         Cpu::init_ipi_queues();
 
         CPU_INIT_FENCE.signal();
         CPU_INIT_FENCE.wait_all(CPU_COUNT.load(Ordering::Acquire));
 
-        task::init();
+        task::init().expect("Failed to initialize the scheduler");
 
         // Initialize and enter the scheduler
         task::enter();
