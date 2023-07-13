@@ -1,5 +1,6 @@
 #![no_std]
 use enum_repr::EnumRepr;
+use error::Error;
 
 pub mod error;
 
@@ -10,19 +11,19 @@ pub enum SyscallFunction {
 }
 
 pub trait SyscallArgument: Sized {
-    fn as_syscall_argument(self) -> usize;
-    fn from_syscall_argument(a: usize) -> Result<Self, ()>;
+    fn into_syscall_argument(self) -> usize;
+    fn from_syscall_argument(a: usize) -> Result<Self, Error>;
 }
 
 macro_rules! impl_syscall_argument {
     () => {
         #[inline(always)]
-        fn as_syscall_argument(self) -> usize {
+        fn into_syscall_argument(self) -> usize {
             self as usize
         }
 
         #[inline(always)]
-        fn from_syscall_argument(a: usize) -> Result<Self, ()> {
+        fn from_syscall_argument(a: usize) -> Result<Self, Error> {
             Ok(a as Self)
         }
     };

@@ -72,6 +72,7 @@ impl Process {
         self.state.load(Ordering::Acquire)
     }
 
+    /// Atomically updates the state of the process and returns the previous one.
     pub fn set_state(&self, state: ProcessState) -> ProcessState {
         self.state.swap(state, Ordering::SeqCst)
     }
@@ -148,6 +149,7 @@ impl Process {
         Self::get_current().unwrap()
     }
 
+    /// Terminate a process
     pub fn exit(&self, _status: usize) {
         let current_state = self.state.swap(ProcessState::Terminated, Ordering::SeqCst);
 
