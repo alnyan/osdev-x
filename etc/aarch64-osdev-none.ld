@@ -12,4 +12,11 @@ SECTIONS {
     .rodata : {
         *(.rodata*)
     }
+
+    . = ALIGN(4K);
+
+    .bss : {
+        *(COMMON)
+        *(.bss*)
+    }
 }

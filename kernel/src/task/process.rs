@@ -150,8 +150,10 @@ impl Process {
     }
 
     /// Terminate a process
-    pub fn exit(&self, _status: usize) {
+    pub fn exit(&self, status: usize) {
         let current_state = self.state.swap(ProcessState::Terminated, Ordering::SeqCst);
+
+        debugln!("Process {} exited with code {}", self.id(), status);
 
         match current_state {
             ProcessState::Suspended => (),

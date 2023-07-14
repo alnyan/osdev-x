@@ -55,6 +55,7 @@ bitflags! {
     /// TODO split attrs for different translation levels
     ///
     /// Describes how each page is mapped: access, presence, type of the mapping.
+    #[derive(Clone, Copy)]
     pub struct PageAttributes: u64 {
         /// When set, the mapping is considered valid and assumed to point to a page/table
         const PRESENT = 1 << 0;

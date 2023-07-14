@@ -121,8 +121,8 @@ extern "C" fn __aa64_exc_sync_handler(frame: *mut ExceptionFrame) {
     match ec {
         // SVC in AArch64
         0b010101 => {
-            let func = frame.r[0];
-            let args = &frame.r[1..6];
+            let func = frame.r[8];
+            let args = &frame.r[0..6];
             let result = raw_syscall_handler(func, args);
             frame.r[0] = result;
         }

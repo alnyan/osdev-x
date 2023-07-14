@@ -1,26 +1,22 @@
-#![feature(optimize_attribute)]
 #![no_std]
 #![no_main]
 
-fn print_string(s: &str) -> usize {
-    let mut x: usize = 1;
-    unsafe {
-        core::arch::asm!("svc #0", inout("x0") x, in("x1") s.as_ptr(), in("x2") s.len());
-    }
-    x
-}
+use libusr::process::ExitCode;
+
+#[macro_use]
+extern crate libusr;
 
 static A_STRINGS: &[&str] = &["A", "B", "C", "D"];
 static B_STRINGS: &[&str] = &["0", "1", "2", "3"];
 
 #[no_mangle]
-extern "C" fn _start(arg: usize) -> ! {
-    let mut counter = 0;
-    loop {
+fn main() -> ExitCode {
+    let arg = libusr::env::args().next().unwrap();
+
+    for counter in 0..100 * (arg + 1) {
         let strings = if arg == 0 { A_STRINGS } else { B_STRINGS };
         let string = strings[counter % strings.len()];
-        counter += 1;
-        print_string(string);
+        debug_trace!("{}: {}", counter, string);
 
         for _ in 0..1000000 {
             unsafe {
@@ -28,9 +24,6 @@ extern "C" fn _start(arg: usize) -> ! {
             }
         }
     }
-}
 
-#[panic_handler]
-fn panic_handler(_pi: &core::panic::PanicInfo) -> ! {
-    loop {}
+    ExitCode::from((arg as i32 + 1) * 10)
 }

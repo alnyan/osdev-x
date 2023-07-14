@@ -1,7 +1,11 @@
 //! Internal management for processes
 
 use aarch64_cpu::registers::TTBR0_EL1;
-use elf::{abi::PT_LOAD, endian::AnyEndian, ElfBytes};
+use elf::{
+    abi::{PF_W, PF_X, PT_LOAD},
+    endian::AnyEndian,
+    ElfBytes,
+};
 use tock_registers::interfaces::Writeable;
 
 use crate::{
@@ -12,7 +16,14 @@ use crate::{
     },
 };
 
-fn load_segment(space: &mut AddressSpace, addr: usize, data: &[u8], memsz: usize) {
+fn load_segment(space: &mut AddressSpace, addr: usize, data: &[u8], memsz: usize, elf_attrs: u32) {
+    let attrs = match (elf_attrs & PF_W, elf_attrs & PF_X) {
+        (0, 0) => PageAttributes::AP_BOTH_READONLY,
+        (_, 0) => PageAttributes::AP_BOTH_READWRITE,
+        (0, _) => PageAttributes::AP_BOTH_READONLY,
+        (_, _) => PageAttributes::AP_BOTH_READWRITE,
+    };
+
     let aligned_start = addr & !0xFFF;
     let aligned_end = (addr + memsz + 0xFFF) & !0xFFF;
 
@@ -43,9 +54,7 @@ fn load_segment(space: &mut AddressSpace, addr: usize, data: &[u8], memsz: usize
     // Map the region as readonly
     for page in (aligned_start..aligned_end).step_by(0x1000) {
         let phys = space.translate(page).unwrap();
-        space
-            .map_page(page, phys, PageAttributes::AP_BOTH_READONLY)
-            .unwrap();
+        space.map_page(page, phys, attrs).unwrap();
     }
 }
 
@@ -63,7 +72,13 @@ pub fn load_elf_from_memory(space: &mut AddressSpace, src: &[u8]) -> usize {
 
         debugln!("LOAD {:#x}", phdr.p_vaddr);
         let data = &src[phdr.p_offset as usize..(phdr.p_offset + phdr.p_filesz) as usize];
-        load_segment(space, phdr.p_vaddr as usize, data, phdr.p_memsz as usize);
+        load_segment(
+            space,
+            phdr.p_vaddr as usize,
+            data,
+            phdr.p_memsz as usize,
+            phdr.p_flags,
+        );
     }
 
     TTBR0_EL1.set_baddr(0);

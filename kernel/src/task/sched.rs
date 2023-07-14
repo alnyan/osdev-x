@@ -120,6 +120,7 @@ impl CpuQueue {
         if let Some(proc) = inner.next_ready_task() {
             inner.queue.push_back(proc.clone());
             inner.current = Some(proc.clone());
+            proc.set_state(ProcessState::Running);
 
             drop(inner);
             proc.context().enter();

@@ -36,7 +36,7 @@ pub mod util;
 /// initialization has finished.
 pub fn kernel_main() {
     loop {
-        debugln!("TEST");
+        // debugln!("TEST");
         for _ in 0..1000000 {
             aarch64_cpu::asm::nop();
         }

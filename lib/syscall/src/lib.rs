@@ -1,5 +1,7 @@
 #![no_std]
 
+use abi::SyscallFunction;
+
 macro_rules! syscall {
     ($num:expr) => {{
         let mut res: usize;
@@ -43,6 +45,41 @@ macro_rules! syscall {
     }};
 }
 
-pub unsafe fn sys_do_something(x: usize, y: usize) -> usize {
-    syscall!(SyscallFunction::DoSomething, x, y)
+macro_rules! argn {
+    ($a:expr) => {
+        $a as usize
+    };
+}
+
+macro_rules! argp {
+    ($a:expr) => {
+        $a as usize
+    };
+}
+
+/// [SyscallFunction::DebugTrace] call.
+///
+/// * s: message to print to the system trace.
+///
+/// # Safety
+///
+/// Unsafe: direct system call.
+pub unsafe fn sys_debug_trace(s: &str) -> usize {
+    syscall!(
+        SyscallFunction::DebugTrace,
+        argp!(s.as_ptr()),
+        argn!(s.len())
+    )
+}
+
+/// [SyscallFunction::Exit] call.
+///
+/// * code: process termination status code.
+///
+/// # Safety
+///
+/// Unsafe: direct system call.
+pub unsafe fn sys_exit(code: i32) -> ! {
+    syscall!(SyscallFunction::Exit, argn!(code));
+    panic!();
 }

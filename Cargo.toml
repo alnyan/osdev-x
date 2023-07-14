@@ -4,5 +4,6 @@ members = [
     "usr/test_program",
 
     "lib/syscall",
-    "lib/abi"
+    "lib/abi",
+    "lib/libusr"
 ]

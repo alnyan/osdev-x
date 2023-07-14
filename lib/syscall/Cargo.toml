@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 enum-repr = "0.2.6"
+abi = { path = "../abi" }
