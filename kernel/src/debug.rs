@@ -3,7 +3,7 @@ use core::fmt::{self, Arguments};
 
 use crate::{
     arch::PLATFORM,
-    device::{serial::SerialDevice, Platform},
+    device::{platform::Platform, serial::SerialDevice},
     sync::IrqSafeSpinlock,
     util::OneTimeInit,
 };

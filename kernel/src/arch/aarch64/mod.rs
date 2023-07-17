@@ -14,7 +14,7 @@ use crate::{
         Architecture,
     },
     debug,
-    device::Platform,
+    device::platform::Platform,
     mem::{
         heap,
         phys::{self, reserved::reserve_region, PageUsage, PhysicalMemoryRegion},

@@ -1,6 +1,6 @@
 #![no_std]
 
-use abi::SyscallFunction;
+use abi::{error::Error, SyscallFunction};
 
 macro_rules! syscall {
     ($num:expr) => {{
@@ -72,6 +72,10 @@ pub unsafe fn sys_debug_trace(s: &str) -> usize {
     )
 }
 
+pub unsafe fn sys_nanosleep(ns: u64) {
+    syscall!(SyscallFunction::Nanosleep, argn!(ns));
+}
+
 /// [SyscallFunction::Exit] call.
 ///
 /// * code: process termination status code.
@@ -82,4 +86,14 @@ pub unsafe fn sys_debug_trace(s: &str) -> usize {
 pub unsafe fn sys_exit(code: i32) -> ! {
     syscall!(SyscallFunction::Exit, argn!(code));
     panic!();
+}
+
+pub unsafe fn write(fd: i32, data: &[u8]) -> Result<usize, Error> {
+    let result = syscall!(
+        SyscallFunction::Write,
+        argn!(fd),
+        argp!(data.as_ptr()),
+        argn!(data.len())
+    );
+    todo!()
 }

@@ -5,7 +5,7 @@ use alloc::{collections::VecDeque, rc::Rc, vec::Vec};
 use tock_registers::interfaces::Readable;
 
 use crate::{
-    arch::aarch64::context::TaskContext,
+    arch::aarch64::{context::TaskContext, cpu::Cpu},
     sync::{IrqSafeSpinlock, IrqSafeSpinlockGuard},
     util::OneTimeInit,
 };
@@ -120,7 +120,7 @@ impl CpuQueue {
         if let Some(proc) = inner.next_ready_task() {
             inner.queue.push_back(proc.clone());
             inner.current = Some(proc.clone());
-            proc.set_state(ProcessState::Running);
+            proc.set_running(Cpu::local_id());
 
             drop(inner);
             proc.context().enter();
@@ -147,7 +147,7 @@ impl CpuQueue {
         let current = inner.current.clone();
 
         if let Some(current) = current.as_ref() {
-            if current.state() != ProcessState::Terminated {
+            if current.state() == ProcessState::Running {
                 current.set_state(ProcessState::Ready);
             }
             inner.queue.push_back(current.clone());
@@ -171,7 +171,7 @@ impl CpuQueue {
         };
 
         let (to, _to_rc) = if let Some(next) = next.as_ref() {
-            next.set_state(ProcessState::Running);
+            next.set_running(Cpu::local_id());
             (next.context(), Rc::strong_count(next))
         } else {
             (&self.idle, 0)

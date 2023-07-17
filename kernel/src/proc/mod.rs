@@ -1,5 +1,7 @@
 //! Internal management for processes
 
+pub mod wait;
+
 use aarch64_cpu::registers::TTBR0_EL1;
 use elf::{
     abi::{PF_W, PF_X, PT_LOAD},

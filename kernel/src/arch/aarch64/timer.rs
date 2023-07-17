@@ -1,12 +1,15 @@
 //! AArch64 Generic Timer
 
-use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0};
+use core::time::Duration;
+
+use aarch64_cpu::registers::{CNTFRQ_EL0, CNTPCT_EL0, CNTP_CTL_EL0, CNTP_TVAL_EL0};
 use abi::error::Error;
-use tock_registers::interfaces::{ReadWriteable, Writeable};
+use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 use crate::{
     arch::PLATFORM,
-    device::{interrupt::InterruptSource, Device, Platform},
+    device::{interrupt::InterruptSource, platform::Platform, timer::TimestampSource, Device},
+    proc::wait,
 };
 
 use super::{cpu::Cpu, gic::IrqNumber};
@@ -30,9 +33,19 @@ impl Device for ArmTimer {
     }
 }
 
+impl TimestampSource for ArmTimer {
+    fn timestamp(&self) -> Result<Duration, Error> {
+        let count = CNTPCT_EL0.get() * 1_000_000;
+        let freq = CNTFRQ_EL0.get();
+
+        Ok(Duration::from_nanos((count / freq) * 1_000))
+    }
+}
+
 impl InterruptSource for ArmTimer {
     fn handle_irq(&self) -> Result<(), Error> {
         CNTP_TVAL_EL0.set(TICK_INTERVAL);
+        wait::tick();
 
         unsafe {
             Cpu::local().queue().yield_cpu();

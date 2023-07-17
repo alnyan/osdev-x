@@ -25,6 +25,7 @@ impl KernelAllocator {
 
 unsafe impl GlobalAlloc for KernelAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        debugln!("alloc {:?}", layout);
         match self.inner.lock().allocate_first_fit(layout) {
             Ok(v) => v.as_ptr(),
             Err(_) => null_mut(),

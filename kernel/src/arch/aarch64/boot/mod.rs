@@ -11,7 +11,7 @@ use super::{
 use crate::{
     absolute_address,
     arch::{Architecture, PLATFORM},
-    device::Platform,
+    device::platform::Platform,
     mem::{ConvertAddress, KERNEL_VIRT_OFFSET},
     sync::SpinFence,
     task,

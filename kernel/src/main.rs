@@ -5,7 +5,8 @@
     panic_info_message,
     optimize_attribute,
     const_trait_impl,
-    maybe_uninit_slice
+    maybe_uninit_slice,
+    linked_list_cursors
 )]
 #![allow(clippy::new_without_default)]
 #![warn(missing_docs)]

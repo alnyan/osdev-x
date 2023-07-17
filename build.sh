@@ -64,7 +64,11 @@ build_kernel_bin() {
 
 build_user_program() {
     pstatus "Build user program \"${1}\""
-    PROFILE=${PROFILE} run_cargo usr/${1} build ${USER_CARGO_OPTS}
+    cd "usr/${1}"
+    cargo +ygg-stage1 build --target=aarch64-unknown-yggdrasil
+    cd -
+
+    # PROFILE=${PROFILE} run_cargo usr/${1} build ${USER_CARGO_OPTS}
 }
 
 build_test_program() {

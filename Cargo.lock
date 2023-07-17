@@ -15,7 +15,9 @@ dependencies = [
 name = "abi"
 version = "0.1.0"
 dependencies = [
- "enum-repr",
+ "compiler_builtins",
+ "rustc-std-workspace-alloc",
+ "rustc-std-workspace-core",
 ]
 
 [[package]]
@@ -40,6 +42,15 @@ name = "bitflags"
 version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
+
+[[package]]
+name = "compiler_builtins"
+version = "0.1.95"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6866e0f3638013234db3c89ead7a14d278354338e7237257407500009012b23f"
+dependencies = [
+ "rustc-std-workspace-core",
+]
 
 [[package]]
 name = "elf"
@@ -177,6 +188,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc-std-workspace-alloc"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff66d57013a5686e1917ed6a025d54dd591fcda71a41fe07edf4d16726aefa86"
+
+[[package]]
+name = "rustc-std-workspace-core"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1956f5517128a2b6f23ab2dadf1a976f4f5b27962e7724c2bf3d45e539ec098c"
+
+[[package]]
 name = "rustc_version"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -243,9 +266,6 @@ dependencies = [
 [[package]]
 name = "test_program"
 version = "0.1.0"
-dependencies = [
- "libusr",
-]
 
 [[package]]
 name = "tock-registers"

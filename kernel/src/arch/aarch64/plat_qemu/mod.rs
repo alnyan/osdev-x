@@ -5,8 +5,10 @@ use tock_registers::interfaces::Writeable;
 
 use crate::device::{
     interrupt::{InterruptController, InterruptSource},
+    platform::Platform,
     serial::{pl011::Pl011, SerialDevice},
-    Device, Platform,
+    timer::TimestampSource,
+    Device,
 };
 
 use super::{
@@ -60,6 +62,10 @@ impl Platform for QemuPlatform {
 
     fn interrupt_controller(&self) -> &dyn InterruptController<IrqNumber = Self::IrqNumber> {
         &self.gic
+    }
+
+    fn timestamp_source(&self) -> &dyn TimestampSource {
+        &self.local_timer
     }
 }
 

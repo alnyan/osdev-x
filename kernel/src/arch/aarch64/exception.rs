@@ -7,9 +7,10 @@ use tock_registers::interfaces::{Readable, Writeable};
 use crate::{
     arch::{aarch64::cpu::Cpu, CpuMessage, PLATFORM},
     debug::LogLevel,
-    device::{interrupt::IrqContext, Platform},
+    device::{interrupt::IrqContext, platform::Platform},
     panic::panic_secondary,
     syscall::raw_syscall_handler,
+    task::process::Process,
 };
 
 /// Struct for register values saved when taking an exception
@@ -125,6 +126,11 @@ extern "C" fn __aa64_exc_sync_handler(frame: *mut ExceptionFrame) {
             let args = &frame.r[0..6];
             let result = raw_syscall_handler(func, args);
             frame.r[0] = result;
+        }
+        // BRK in AArch64
+        0b111100 => {
+            Process::current().exit(1);
+            panic!("Cannot return here");
         }
         _ => {
             let iss = esr_el1 & 0x1FFFFFF;

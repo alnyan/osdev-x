@@ -10,6 +10,10 @@ extern "Rust" {
     fn main() -> process::ExitCode;
 }
 
+pub fn sleep(ns: u64) {
+    unsafe { syscall::sys_nanosleep(ns) }
+}
+
 #[no_mangle]
 extern "C" fn _start(arg: usize) -> ! {
     unsafe {

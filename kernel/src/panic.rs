@@ -4,7 +4,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use crate::{
     arch::{Architecture, ArchitectureImpl, CpuMessage, PLATFORM},
     debug::{debug_internal, LogLevel},
-    device::{interrupt::IpiDeliveryTarget, Platform},
+    device::{interrupt::IpiDeliveryTarget, platform::Platform},
     sync::SpinFence,
 };
 

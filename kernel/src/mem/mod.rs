@@ -1,7 +1,7 @@
 //! Memory management utilities and types
 use crate::{
     arch::{Architecture, ArchitectureImpl, PlatformImpl},
-    device::Platform,
+    device::platform::Platform,
 };
 
 pub mod device;

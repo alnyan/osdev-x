@@ -9,7 +9,7 @@ use tock_registers::{
 use super::SerialDevice;
 use crate::{
     arch::{aarch64::gic::IrqNumber, PLATFORM},
-    device::{interrupt::InterruptSource, Device, Platform},
+    device::{interrupt::InterruptSource, platform::Platform, Device},
     mem::device::DeviceMemoryIo,
     sync::IrqSafeSpinlock,
     util::OneTimeInit,

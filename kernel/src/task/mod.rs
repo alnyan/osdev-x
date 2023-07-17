@@ -3,7 +3,7 @@ use core::sync::atomic::Ordering;
 
 use aarch64_cpu::registers::MPIDR_EL1;
 use abi::error::Error;
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use tock_registers::interfaces::Readable;
 
 use crate::{
@@ -67,14 +67,14 @@ pub static PROCESSES: IrqSafeSpinlock<ProcessList> = IrqSafeSpinlock::new(Proces
 
 /// Creates a new kernel-space process to execute a closure and queues it to some CPU
 pub fn spawn_kernel_closure<F: Fn() + Send + 'static>(f: F) -> Result<(), Error> {
-    let proc = Process::new_with_context(TaskContext::kernel_closure(f)?);
+    let proc = Process::new_with_context(None, TaskContext::kernel_closure(f)?);
     proc.enqueue_somewhere();
 
     Ok(())
 }
 
 static USER_PROGRAM: &[u8] = include_bytes!(concat!(
-    "../../../target/aarch64-osdev-none/",
+    "../../../target/aarch64-unknown-yggdrasil/",
     env!("PROFILE"),
     "/test_program"
 ));
@@ -90,7 +90,7 @@ pub fn init() -> Result<(), Error> {
     spawn_kernel_closure(kernel_main)?;
 
     // Spawn a test user task
-    for i in 0..2 {
+    for i in 0..1 {
         let mut space = AddressSpace::new_empty(i + 1).unwrap();
         let elf_entry = proc::load_elf_from_memory(&mut space, USER_PROGRAM);
         infoln!("SETUP TASK {}", i + 1);
@@ -118,7 +118,7 @@ pub fn init() -> Result<(), Error> {
         )
         .unwrap();
 
-        let proc = Process::new_with_context(context);
+        let proc = Process::new_with_context(Some(space), context);
         proc.enqueue_somewhere();
     }
 

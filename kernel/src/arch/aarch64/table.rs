@@ -9,13 +9,13 @@ use bitflags::bitflags;
 
 use crate::mem::{
     phys::{self, PageUsage},
-    table::{EntryLevel, NextPageTable},
+    table::{EntryLevel, NextPageTable, VirtualMemoryManager},
     ConvertAddress, KERNEL_VIRT_OFFSET,
 };
 
 /// TODO
 #[derive(Clone)]
-#[repr(C, align(0x1000))]
+#[repr(C)]
 pub struct AddressSpace {
     l1: *mut PageTable<L1>,
     asid: u8,
@@ -193,6 +193,10 @@ impl<L: EntryLevel> PageEntry<L> {
     pub unsafe fn from_raw(raw: u64) -> Self {
         Self(raw, PhantomData)
     }
+
+    pub fn is_present(&self) -> bool {
+        self.0 & PageAttributes::PRESENT.bits() != 0
+    }
 }
 
 impl<L: NonTerminalEntryLevel> NextPageTable for PageTable<L> {
@@ -302,6 +306,53 @@ impl FixedTables {
     }
 }
 
+impl VirtualMemoryManager for AddressSpace {
+    fn allocate(
+        &self,
+        hint: Option<usize>,
+        len: usize,
+        attrs: PageAttributes,
+    ) -> Result<usize, Error> {
+        if hint.is_some() {
+            todo!();
+        }
+
+        let l1 = unsafe { self.as_mut() };
+
+        const TRY_ALLOC_START: usize = 0x100000000;
+        const TRY_ALLOC_END: usize = 0xF00000000;
+
+        'l0: for base in (TRY_ALLOC_START..TRY_ALLOC_END - len * 0x1000).step_by(0x1000) {
+            for i in 0..len {
+                if self.translate(base + i * 0x1000).is_some() {
+                    continue 'l0;
+                }
+            }
+
+            for i in 0..len {
+                let page = phys::alloc_page(PageUsage::Used)?;
+                self.map_page(base + i * 0x1000, page, attrs)?;
+            }
+
+            return Ok(base);
+        }
+
+        Err(Error::OutOfMemory)
+    }
+
+    fn deallocate(&self, addr: usize, len: usize) -> Result<(), Error> {
+        for page in (addr..addr + len).step_by(0x1000) {
+            let Some(phys) = self.translate(page) else {
+                todo!();
+            };
+
+            self.write_entry(page, PageEntry::INVALID, true)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl AddressSpace {
     /// Allocates an empty address space with all entries marked as non-present
     pub fn new_empty(asid: u8) -> Result<Self, Error> {
@@ -333,8 +384,8 @@ impl AddressSpace {
         l3[l3i].as_page()
     }
 
-    /// Inserts a single 4KiB virt -> phys mapping into the address apce
-    pub fn map_page(&self, virt: usize, phys: usize, attrs: PageAttributes) -> Result<(), Error> {
+    // Write a single 4KiB entry
+    fn write_entry(&self, virt: usize, entry: PageEntry<L3>, overwrite: bool) -> Result<(), Error> {
         let l1i = L1::index(virt);
         let l2i = L2::index(virt);
         let l3i = L3::index(virt);
@@ -342,16 +393,17 @@ impl AddressSpace {
         let l2 = unsafe { self.as_mut().get_mut_or_alloc(l1i) }?;
         let l3 = l2.get_mut_or_alloc(l2i)?;
 
-        debugln!(
-            "[{:#x}] map {:#x} -> {:#x}",
-            self.physical_address(),
-            virt,
-            phys
-        );
-
-        l3[l3i] = PageEntry::page(phys, attrs);
+        if l3[l3i].is_present() && !overwrite {
+            todo!()
+        }
+        l3[l3i] = entry;
 
         Ok(())
+    }
+
+    /// Inserts a single 4KiB virt -> phys mapping into the address apce
+    pub fn map_page(&self, virt: usize, phys: usize, attrs: PageAttributes) -> Result<(), Error> {
+        self.write_entry(virt, PageEntry::page(phys, attrs), true)
     }
 
     /// Returns the physical address of the address space (to be used in a TTBRn_ELx)

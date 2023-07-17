@@ -6,4 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-enum-repr = "0.2.6"
+core = { version = "1.0.0", optional = true, package = "rustc-std-workspace-core" }
+alloc = { version = "1.0.0", optional = true, package = "rustc-std-workspace-alloc" }
+compiler_builtins = { version = "0.1", optional = true }
+
+[features]
+default = []
+rustc-dep-of-std = ["core", "alloc", "compiler_builtins/rustc-dep-of-std"]

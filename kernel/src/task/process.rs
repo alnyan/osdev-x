@@ -1,11 +1,17 @@
 //! Process data structures
-use core::sync::atomic::Ordering;
+use core::{
+    mem::size_of,
+    sync::atomic::{AtomicU32, AtomicUsize, Ordering},
+};
 
 use alloc::rc::Rc;
 use atomic_enum::atomic_enum;
 
 use crate::{
     arch::aarch64::{context::TaskContext, cpu::Cpu},
+    mem::table::AddressSpace,
+    proc::wait::{Wait, WaitStatus},
+    sync::{IrqGuard, IrqSafeSpinlock},
     util::OneTimeInit,
 };
 
@@ -25,6 +31,11 @@ pub enum ProcessState {
     Terminated,
 }
 
+struct ProcessInner {
+    pending_wait: Option<&'static Wait>,
+    wait_status: WaitStatus,
+}
+
 /// Process data and state structure
 pub struct Process {
     context: TaskContext,
@@ -32,6 +43,9 @@ pub struct Process {
     // Process state info
     id: OneTimeInit<ProcessId>,
     state: AtomicProcessState,
+    cpu_id: AtomicU32,
+    inner: IrqSafeSpinlock<ProcessInner>,
+    space: Option<AddressSpace>,
 }
 
 impl Process {
@@ -40,11 +54,17 @@ impl Process {
     /// # Note
     ///
     /// Has side-effect of allocating a new PID for itself.
-    pub fn new_with_context(context: TaskContext) -> Rc<Self> {
+    pub fn new_with_context(space: Option<AddressSpace>, context: TaskContext) -> Rc<Self> {
         let this = Rc::new(Self {
             context,
             id: OneTimeInit::new(),
             state: AtomicProcessState::new(ProcessState::Suspended),
+            cpu_id: AtomicU32::new(0),
+            inner: IrqSafeSpinlock::new(ProcessInner {
+                pending_wait: None,
+                wait_status: WaitStatus::Done,
+            }),
+            space,
         });
 
         let id = unsafe { PROCESSES.lock().push(this.clone()) };
@@ -75,6 +95,16 @@ impl Process {
     /// Atomically updates the state of the process and returns the previous one.
     pub fn set_state(&self, state: ProcessState) -> ProcessState {
         self.state.swap(state, Ordering::SeqCst)
+    }
+
+    ///
+    pub unsafe fn set_running(&self, cpu: u32) {
+        self.cpu_id.store(cpu, Ordering::Release);
+        self.state.store(ProcessState::Running, Ordering::Release);
+    }
+
+    pub fn address_space(&self) -> &AddressSpace {
+        self.space.as_ref().unwrap()
     }
 
     /// Selects a suitable CPU queue and submits the process for execution.
@@ -121,6 +151,7 @@ impl Process {
     /// The code currently does not allow suspension of active processes on either local or other
     /// CPUs.
     pub fn suspend(&self) {
+        let _irq = IrqGuard::acquire();
         let current_state = self.state.swap(ProcessState::Suspended, Ordering::SeqCst);
 
         match current_state {
@@ -132,9 +163,28 @@ impl Process {
             ProcessState::Suspended => (),
             ProcessState::Terminated => panic!("Process is terminated"),
             ProcessState::Running => {
-                todo!("Cannot dequeue self currently");
+                let cpu_id = self.cpu_id.load(Ordering::Acquire);
+                let local_cpu_id = Cpu::local_id();
+                let queue = Cpu::local().queue();
+
+                if cpu_id == local_cpu_id {
+                    // Suspending a process running on local CPU
+                    unsafe { Cpu::local().queue().yield_cpu() }
+                } else {
+                    todo!();
+                }
             }
         }
+    }
+
+    pub fn setup_wait(&self, wait: &'static Wait) {
+        let mut inner = self.inner.lock();
+        let old = inner.pending_wait.replace(wait);
+        inner.wait_status = WaitStatus::Pending;
+    }
+
+    pub fn wait_status(&self) -> WaitStatus {
+        self.inner.lock().wait_status
     }
 
     /// Returns the [Process] currently executing on local CPU, None if idling.

@@ -3,6 +3,17 @@ use abi::error::Error;
 
 pub use crate::arch::aarch64::table::{AddressSpace, PageAttributes, PageEntry, PageTable};
 
+pub trait VirtualMemoryManager {
+    fn allocate(
+        &self,
+        hint: Option<usize>,
+        len: usize,
+        attrs: PageAttributes,
+    ) -> Result<usize, Error>;
+
+    fn deallocate(&self, addr: usize, len: usize) -> Result<(), Error>;
+}
+
 /// Interface for non-terminal tables to retrieve the next level of address translation tables
 pub trait NextPageTable {
     /// Type for the next-level page table
