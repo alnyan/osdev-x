@@ -1,5 +1,5 @@
 //! Multitasking and process/thread management interfaces
-use core::sync::atomic::Ordering;
+use core::{mem::size_of, sync::atomic::Ordering};
 
 use aarch64_cpu::registers::MPIDR_EL1;
 use abi::error::Error;
@@ -12,6 +12,7 @@ use crate::{
     mem::{
         phys::{self, PageUsage},
         table::{AddressSpace, PageAttributes},
+        ConvertAddress,
     },
     proc,
     sync::{IrqSafeSpinlock, SpinFence},
@@ -90,37 +91,17 @@ pub fn init() -> Result<(), Error> {
     spawn_kernel_closure(kernel_main)?;
 
     // Spawn a test user task
-    for i in 0..1 {
-        let mut space = AddressSpace::new_empty(i + 1).unwrap();
-        let elf_entry = proc::load_elf_from_memory(&mut space, USER_PROGRAM);
-        infoln!("SETUP TASK {}", i + 1);
+    let proc =
+        proc::exec::create_from_memory(USER_PROGRAM, &["user-program", "argument 1", "argument 2"]);
 
-        const USER_STACK_PAGES: usize = 8;
-        let virt_stack_base = 0x10000000;
-        for i in 0..USER_STACK_PAGES {
-            let phys = phys::alloc_page(PageUsage::Used).unwrap();
-            space
-                .map_page(
-                    virt_stack_base + i * 0x1000,
-                    phys,
-                    PageAttributes::AP_BOTH_READWRITE,
-                )
-                .unwrap();
+    match proc {
+        Ok(proc) => {
+            proc.enqueue_somewhere();
         }
-
-        debugln!("Entry: {:#x}", elf_entry);
-
-        let context = TaskContext::user(
-            elf_entry,
-            i as usize,
-            space.physical_address(),
-            virt_stack_base + USER_STACK_PAGES * 0x1000,
-        )
-        .unwrap();
-
-        let proc = Process::new_with_context(Some(space), context);
-        proc.enqueue_somewhere();
-    }
+        Err(err) => {
+            warnln!("Failed to create user process: {:?}", err);
+        }
+    };
 
     Ok(())
 }

@@ -1,6 +1,10 @@
 use std::time::Duration;
 
 fn main() {
+    for arg in std::env::args() {
+        println!("arg: {}", arg);
+    }
+
     #[derive(Debug)]
     struct A {
         a: u32,

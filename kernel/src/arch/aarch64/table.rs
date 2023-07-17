@@ -2,6 +2,7 @@
 use core::{
     marker::PhantomData,
     ops::{Index, IndexMut},
+    sync::atomic::{AtomicU8, Ordering},
 };
 
 use abi::error::Error;
@@ -355,7 +356,11 @@ impl VirtualMemoryManager for AddressSpace {
 
 impl AddressSpace {
     /// Allocates an empty address space with all entries marked as non-present
-    pub fn new_empty(asid: u8) -> Result<Self, Error> {
+    pub fn new_empty() -> Result<Self, Error> {
+        static LAST_ASID: AtomicU8 = AtomicU8::new(1);
+
+        let asid = LAST_ASID.fetch_add(1, Ordering::AcqRel);
+
         let l1 = unsafe { phys::alloc_page(PageUsage::Used)?.virtualize() as *mut PageTable<L1> };
 
         for i in 0..512 {

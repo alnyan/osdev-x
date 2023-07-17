@@ -12,7 +12,7 @@ fi
 QEMU=qemu-system-aarch64
 
 KERNEL_TARGET=${ARCH}-unknown-none
-USER_TARGET=${ARCH}-osdev-none
+USER_TARGET=${ARCH}-unknown-yggdrasil
 
 QEMU_OPTS=" \
     -s \
@@ -27,9 +27,7 @@ KERNEL_CARGO_OPTS=" \
     --target=${WORKSPACE_ROOT}/etc/${KERNEL_TARGET}.json \
     -Z build-std=core,alloc,compiler_builtins"
 
-USER_CARGO_OPTS=" \
-    --target=${WORKSPACE_ROOT}/etc/${USER_TARGET}.json \
-    -Z build-std=core,alloc,compiler_builtins"
+USER_CARGO_OPTS="--target=${USER_TARGET}"
 
 if [ "${PROFILE}" = release ]; then
     KERNEL_CARGO_OPTS="${KERNEL_CARGO_OPTS} --release"
@@ -48,7 +46,7 @@ run_cargo() {
     local cargo_opts="${@}"
 
     cd "${crate_dir}"
-    cargo ${cargo_opts}
+    cargo ${cargo_toolchain} ${cargo_opts}
     cd -
 }
 
@@ -64,11 +62,7 @@ build_kernel_bin() {
 
 build_user_program() {
     pstatus "Build user program \"${1}\""
-    cd "usr/${1}"
-    cargo +ygg-stage1 build --target=aarch64-unknown-yggdrasil
-    cd -
-
-    # PROFILE=${PROFILE} run_cargo usr/${1} build ${USER_CARGO_OPTS}
+    PROFILE=${PROFILE} cargo_toolchain=+ygg-stage1 run_cargo usr/${1} build ${USER_CARGO_OPTS}
 }
 
 build_test_program() {

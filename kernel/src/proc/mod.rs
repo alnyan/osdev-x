@@ -1,5 +1,6 @@
 //! Internal management for processes
 
+pub mod exec;
 pub mod wait;
 
 use aarch64_cpu::registers::TTBR0_EL1;
