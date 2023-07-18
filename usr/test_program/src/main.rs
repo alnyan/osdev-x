@@ -1,18 +1,24 @@
-use std::time::Duration;
+use std::{
+    fs::OpenOptions,
+    io::{Read, Write},
+};
 
 fn main() {
-    for arg in std::env::args() {
-        println!("arg: {}", arg);
-    }
+    let mut f = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/ttyS0")
+        .unwrap();
 
-    #[derive(Debug)]
-    struct A {
-        a: u32,
-        b: i32,
-    }
-    let a = A { a: 1234, b: -31 };
-    for _ in 0..10 {
-        std::thread::sleep(Duration::from_secs(1));
-        println!("Hello {:?}", a);
+    let mut buf = [0; 1];
+    loop {
+        f.read(&mut buf).unwrap();
+
+        if buf[0] == 0x3 {
+            println!("Interrupt received");
+            break;
+        }
+
+        f.write(&buf[..1]).unwrap();
     }
 }

@@ -3,12 +3,15 @@ use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0};
 use abi::error::Error;
 use tock_registers::interfaces::Writeable;
 
-use crate::device::{
-    interrupt::{InterruptController, InterruptSource},
-    platform::Platform,
-    serial::{pl011::Pl011, SerialDevice},
-    timer::TimestampSource,
-    Device,
+use crate::{
+    device::{
+        interrupt::{InterruptController, InterruptSource},
+        platform::Platform,
+        serial::{pl011::Pl011, SerialDevice},
+        timer::TimestampSource,
+        Device,
+    },
+    fs::devfs::{self, CharDeviceType},
 };
 
 use super::{
@@ -33,6 +36,7 @@ impl Platform for QemuPlatform {
             self.gic.init()?;
 
             self.pl011.init_irq()?;
+            devfs::add_char_device(&self.pl011, CharDeviceType::TtySerial)?;
 
             self.local_timer.init()?;
             self.local_timer.init_irq()?;

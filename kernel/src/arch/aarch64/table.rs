@@ -195,6 +195,7 @@ impl<L: EntryLevel> PageEntry<L> {
         Self(raw, PhantomData)
     }
 
+    /// Returns `true` if the entry refers to some table/block/page
     pub fn is_present(&self) -> bool {
         self.0 & PageAttributes::PRESENT.bits() != 0
     }
@@ -318,8 +319,6 @@ impl VirtualMemoryManager for AddressSpace {
             todo!();
         }
 
-        let l1 = unsafe { self.as_mut() };
-
         const TRY_ALLOC_START: usize = 0x100000000;
         const TRY_ALLOC_END: usize = 0xF00000000;
 
@@ -343,7 +342,7 @@ impl VirtualMemoryManager for AddressSpace {
 
     fn deallocate(&self, addr: usize, len: usize) -> Result<(), Error> {
         for page in (addr..addr + len).step_by(0x1000) {
-            let Some(phys) = self.translate(page) else {
+            let Some(_phys) = self.translate(page) else {
                 todo!();
             };
 

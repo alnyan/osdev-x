@@ -92,7 +92,7 @@ impl LogLevel {
 impl fmt::Write for DebugPrinter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for c in s.bytes() {
-            self.sink.send(c);
+            self.sink.send(c).ok();
         }
 
         Ok(())

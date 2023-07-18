@@ -80,8 +80,11 @@ case "$1" in
         build
         ;;
     check | clippy)
+        PROFILE=${PROFILE} cargo_toolchain=+ygg-stage1 run_cargo usr/test_program $1 ${USER_CARGO_OPTS}
         PROFILE=${PROFILE} run_cargo kernel $1 ${KERNEL_CARGO_OPTS}
-        PROFILE=${PROFILE} run_cargo usr/test_program $1 ${KERNEL_CARGO_OPTS}
+        ;;
+    test)
+        PROFILE=${PROFILE} run_cargo lib/vfs $1
         ;;
     qemu)
         build

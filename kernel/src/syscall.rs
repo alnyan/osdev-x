@@ -3,12 +3,12 @@ use core::time::Duration;
 
 use abi::{
     error::{Error, IntoSyscallResult},
+    io::{OpenFlags, RawFd},
     SyscallFunction,
 };
+use vfs::{Read, Write};
 
 use crate::{
-    arch::PLATFORM,
-    device::platform::Platform,
     mem::table::{PageAttributes, VirtualMemoryManager},
     proc::wait,
     task::process::Process,
@@ -19,6 +19,13 @@ fn arg_buffer_ref<'a>(base: usize, len: usize) -> Result<&'a [u8], Error> {
         panic!("Invalid argument");
     }
     Ok(unsafe { core::slice::from_raw_parts(base as *const u8, len) })
+}
+
+fn arg_buffer_mut<'a>(base: usize, len: usize) -> Result<&'a mut [u8], Error> {
+    if base + len > crate::mem::KERNEL_VIRT_OFFSET {
+        panic!("Invalid argument");
+    }
+    Ok(unsafe { core::slice::from_raw_parts_mut(base as *mut u8, len) })
 }
 
 fn arg_user_str<'a>(base: usize, len: usize) -> Result<&'a str, Error> {
@@ -89,18 +96,47 @@ pub fn raw_syscall_handler(func: u64, args: &[u64]) -> u64 {
             res.into_syscall_result() as u64
         }
         SyscallFunction::Write => {
-            let fd = args[0] as i32;
+            let fd = RawFd(args[0] as u32);
             let data = arg_buffer_ref(args[1] as _, args[2] as _).unwrap();
 
-            if fd == 1 || fd == 2 {
-                let serial = PLATFORM.primary_serial().unwrap();
+            let proc = Process::current();
+            let io = proc.io.lock();
+            let file = io.file(fd).unwrap();
+            let mut file_borrow = file.borrow_mut();
 
-                for &b in data {
-                    serial.send(b);
-                }
-            }
+            file_borrow.write(data).into_syscall_result() as u64
+        }
+        SyscallFunction::Read => {
+            let fd = RawFd(args[0] as u32);
+            let data = arg_buffer_mut(args[1] as _, args[2] as _).unwrap();
 
-            data.len() as u64
+            let proc = Process::current();
+            let io = proc.io.lock();
+            let file = io.file(fd).unwrap();
+            let mut file_borrow = file.borrow_mut();
+
+            file_borrow.read(data).into_syscall_result() as u64
+        }
+        SyscallFunction::Open => {
+            let path = arg_user_str(args[0] as usize, args[1] as usize).unwrap();
+            let opts = OpenFlags(args[2] as u32);
+
+            debugln!("sys_open {}", path);
+
+            let proc = Process::current();
+            let mut io = proc.io.lock();
+
+            let file = io.ioctx().open(None, path, opts).unwrap();
+            let fd = io.place_file(file);
+
+            fd.into_syscall_result() as u64
+        }
+        SyscallFunction::Close => {
+            let fd = RawFd(args[0] as u32);
+
+            let proc = Process::current();
+            let mut io = proc.io.lock();
+            io.close_file(fd).into_syscall_result() as u64
         }
     }
 }

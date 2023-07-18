@@ -1,20 +1,14 @@
 //! Multitasking and process/thread management interfaces
-use core::{mem::size_of, sync::atomic::Ordering};
+use core::sync::atomic::Ordering;
 
 use aarch64_cpu::registers::MPIDR_EL1;
 use abi::error::Error;
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec};
 use tock_registers::interfaces::Readable;
 
 use crate::{
     arch::aarch64::{context::TaskContext, cpu::Cpu, smp::CPU_COUNT},
     kernel_main,
-    mem::{
-        phys::{self, PageUsage},
-        table::{AddressSpace, PageAttributes},
-        ConvertAddress,
-    },
-    proc,
     sync::{IrqSafeSpinlock, SpinFence},
     task::sched::CpuQueue,
 };
@@ -74,12 +68,6 @@ pub fn spawn_kernel_closure<F: Fn() + Send + 'static>(f: F) -> Result<(), Error>
     Ok(())
 }
 
-static USER_PROGRAM: &[u8] = include_bytes!(concat!(
-    "../../../target/aarch64-unknown-yggdrasil/",
-    env!("PROFILE"),
-    "/test_program"
-));
-
 /// Sets up CPU queues and gives them some processes to run
 pub fn init() -> Result<(), Error> {
     let cpu_count = CPU_COUNT.load(Ordering::Acquire);
@@ -89,19 +77,6 @@ pub fn init() -> Result<(), Error> {
 
     // Spawn kernel main task
     spawn_kernel_closure(kernel_main)?;
-
-    // Spawn a test user task
-    let proc =
-        proc::exec::create_from_memory(USER_PROGRAM, &["user-program", "argument 1", "argument 2"]);
-
-    match proc {
-        Ok(proc) => {
-            proc.enqueue_somewhere();
-        }
-        Err(err) => {
-            warnln!("Failed to create user process: {:?}", err);
-        }
-    };
 
     Ok(())
 }

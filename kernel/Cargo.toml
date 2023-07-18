@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 abi = { path = "../lib/abi" }
+vfs = { path = "../lib/vfs" }
 
 aarch64-cpu = "9.3.1"
 atomic_enum = "0.2.0"

@@ -1,8 +1,5 @@
 //! Process data structures
-use core::{
-    mem::size_of,
-    sync::atomic::{AtomicU32, AtomicUsize, Ordering},
-};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use alloc::rc::Rc;
 use atomic_enum::atomic_enum;
@@ -10,7 +7,10 @@ use atomic_enum::atomic_enum;
 use crate::{
     arch::aarch64::{context::TaskContext, cpu::Cpu},
     mem::table::AddressSpace,
-    proc::wait::{Wait, WaitStatus},
+    proc::{
+        io::ProcessIo,
+        wait::{Wait, WaitStatus},
+    },
     sync::{IrqGuard, IrqSafeSpinlock},
     util::OneTimeInit,
 };
@@ -46,6 +46,8 @@ pub struct Process {
     cpu_id: AtomicU32,
     inner: IrqSafeSpinlock<ProcessInner>,
     space: Option<AddressSpace>,
+    /// I/O state of the task
+    pub io: IrqSafeSpinlock<ProcessIo>,
 }
 
 impl Process {
@@ -65,6 +67,7 @@ impl Process {
                 wait_status: WaitStatus::Done,
             }),
             space,
+            io: IrqSafeSpinlock::new(ProcessIo::new()),
         });
 
         let id = unsafe { PROCESSES.lock().push(this.clone()) };
@@ -97,12 +100,17 @@ impl Process {
         self.state.swap(state, Ordering::SeqCst)
     }
 
+    /// Marks the task as running on the specified CPU.
     ///
+    /// # Safety
+    ///
+    /// Only meant to be called from scheduler routines.
     pub unsafe fn set_running(&self, cpu: u32) {
         self.cpu_id.store(cpu, Ordering::Release);
         self.state.store(ProcessState::Running, Ordering::Release);
     }
 
+    /// Returns the address space of the task
     pub fn address_space(&self) -> &AddressSpace {
         self.space.as_ref().unwrap()
     }
@@ -169,7 +177,7 @@ impl Process {
 
                 if cpu_id == local_cpu_id {
                     // Suspending a process running on local CPU
-                    unsafe { Cpu::local().queue().yield_cpu() }
+                    unsafe { queue.yield_cpu() }
                 } else {
                     todo!();
                 }
@@ -177,14 +185,31 @@ impl Process {
         }
     }
 
-    pub fn setup_wait(&self, wait: &'static Wait) {
+    /// Sets up a pending wait for the process.
+    ///
+    /// # Safety
+    ///
+    /// This function is only meant to be called in no-IRQ context and when caller can guarantee
+    /// the task won't get scheduled to a CPU in such state.
+    pub unsafe fn setup_wait(&self, wait: &'static Wait) {
         let mut inner = self.inner.lock();
-        let old = inner.pending_wait.replace(wait);
+        inner.pending_wait.replace(wait);
         inner.wait_status = WaitStatus::Pending;
     }
 
+    /// Returns current wait status of the task
     pub fn wait_status(&self) -> WaitStatus {
         self.inner.lock().wait_status
+    }
+
+    /// Updates the wait status for the task.
+    ///
+    /// # Safety
+    ///
+    /// This function is only meant to be called on waiting tasks, otherwise atomicity is not
+    /// guaranteed.
+    pub unsafe fn set_wait_status(&self, status: WaitStatus) {
+        self.inner.lock().wait_status = status;
     }
 
     /// Returns the [Process] currently executing on local CPU, None if idling.

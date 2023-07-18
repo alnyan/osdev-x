@@ -1,6 +1,8 @@
 #![no_std]
 
 pub mod error;
+pub mod io;
+pub mod path;
 
 #[derive(Clone, Copy, Debug)]
 pub enum SyscallFunction {
@@ -9,6 +11,9 @@ pub enum SyscallFunction {
     MapMemory = 3,
     UnmapMemory = 4,
     Write = 5,
+    Read = 6,
+    Open = 7,
+    Close = 8,
 
     DebugTrace = 128,
 }
@@ -23,6 +28,9 @@ impl TryFrom<usize> for SyscallFunction {
             3 => Ok(Self::MapMemory),
             4 => Ok(Self::UnmapMemory),
             5 => Ok(Self::Write),
+            6 => Ok(Self::Read),
+            7 => Ok(Self::Open),
+            8 => Ok(Self::Close),
 
             128 => Ok(Self::DebugTrace),
 
@@ -39,6 +47,9 @@ impl From<SyscallFunction> for usize {
             SyscallFunction::MapMemory => 3,
             SyscallFunction::UnmapMemory => 4,
             SyscallFunction::Write => 5,
+            SyscallFunction::Read => 6,
+            SyscallFunction::Open => 7,
+            SyscallFunction::Close => 8,
 
             SyscallFunction::DebugTrace => 128,
         }

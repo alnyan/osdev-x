@@ -3,7 +3,10 @@ use abi::error::Error;
 
 pub use crate::arch::aarch64::table::{AddressSpace, PageAttributes, PageEntry, PageTable};
 
+/// Interface for virtual memory address space management
 pub trait VirtualMemoryManager {
+    /// Allocates a region of virtual memory inside the address space and maps it to physical
+    /// memory pages with given attributes
     fn allocate(
         &self,
         hint: Option<usize>,
@@ -11,6 +14,7 @@ pub trait VirtualMemoryManager {
         attrs: PageAttributes,
     ) -> Result<usize, Error>;
 
+    /// Releases the virtual memory region from the address space and the pages it refers to
     fn deallocate(&self, addr: usize, len: usize) -> Result<(), Error>;
 }
 

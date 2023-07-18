@@ -1,3 +1,4 @@
+//! Binary execution functions
 use core::mem::size_of;
 
 use abi::error::Error;
@@ -65,6 +66,7 @@ fn setup_args(space: &mut AddressSpace, virt: usize, args: &[&str]) -> Result<()
     Ok(())
 }
 
+/// Sets up a userspace structure from a slice defining an ELF binary
 pub fn create_from_memory(data: &[u8], args: &[&str]) -> Result<Rc<Process>, Error> {
     const USER_STACK_PAGES: usize = 8;
 

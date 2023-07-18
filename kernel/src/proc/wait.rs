@@ -1,3 +1,4 @@
+//! Wait channel implementation
 use core::time::Duration;
 
 use abi::error::Error;
@@ -7,15 +8,22 @@ use crate::{
     arch::PLATFORM, device::platform::Platform, sync::IrqSafeSpinlock, task::process::Process,
 };
 
+/// Defines whether the wait channel is available for a specific task
 #[derive(Clone, Copy, Debug)]
 pub enum WaitStatus {
+    /// Wait on the channel was interrupted
     Interrupted,
+    /// Channel did not yet signal availability
     Pending,
+    /// Channel has data available
     Done,
 }
 
+/// Wait notification channel
 pub struct Wait {
     queue: IrqSafeSpinlock<LinkedList<Rc<Process>>>,
+    // Used for tracing waits
+    #[allow(dead_code)]
     name: &'static str,
 }
 
@@ -25,6 +33,7 @@ struct Timeout {
 }
 
 impl Wait {
+    /// Constructs a new wait notification channel
     pub const fn new(name: &'static str) -> Self {
         Self {
             name,
@@ -32,11 +41,59 @@ impl Wait {
         }
     }
 
+    /// Wakes up tasks waiting for availability on this channel, but no more than `limit`
+    pub fn wakeup_some(&self, mut limit: usize) -> usize {
+        let mut queue = self.queue.lock();
+        let mut count = 0;
+        while limit != 0 && !queue.is_empty() {
+            let proc = queue.pop_front().unwrap();
+
+            {
+                let mut tick_lock = TICK_LIST.lock();
+                let mut cursor = tick_lock.cursor_front_mut();
+
+                while let Some(item) = cursor.current() {
+                    if proc.id() == item.process.id() {
+                        cursor.remove_current();
+                        break;
+                    } else {
+                        cursor.move_next();
+                    }
+                }
+
+                drop(tick_lock);
+
+                unsafe {
+                    proc.set_wait_status(WaitStatus::Done);
+                }
+                proc.enqueue_somewhere();
+            }
+
+            limit -= 1;
+            count += 1;
+        }
+
+        count
+    }
+
+    /// Wakes up all tasks waiting on this channel
+    pub fn wakeup_all(&self) {
+        self.wakeup_some(usize::MAX);
+    }
+
+    /// Wakes up a single task waiting on this channel
+    pub fn wakeup_one(&self) {
+        self.wakeup_some(1);
+    }
+
+    /// Suspends the task until either the deadline is reached or this channel signals availability
     pub fn wait(&'static self, deadline: Option<Duration>) -> Result<(), Error> {
         let process = Process::current();
         let mut queue_lock = self.queue.lock();
         queue_lock.push_back(process.clone());
-        process.setup_wait(self);
+        unsafe {
+            process.setup_wait(self);
+        }
 
         if let Some(deadline) = deadline {
             TICK_LIST.lock().push_back(Timeout {
@@ -48,7 +105,7 @@ impl Wait {
         loop {
             match process.wait_status() {
                 WaitStatus::Pending => (),
-                WaitStatus::Done => todo!(),
+                WaitStatus::Done => return Ok(()),
                 WaitStatus::Interrupted => todo!(),
             }
 
@@ -75,13 +132,13 @@ impl Wait {
                     panic!();
                 }
             }
-            todo!();
         }
     }
 }
 
 static TICK_LIST: IrqSafeSpinlock<LinkedList<Timeout>> = IrqSafeSpinlock::new(LinkedList::new());
 
+/// Suspends current task until given deadline
 pub fn sleep(timeout: Duration, remaining: &mut Duration) -> Result<(), Error> {
     static SLEEP_NOTIFY: Wait = Wait::new("sleep");
     let now = PLATFORM.timestamp_source().timestamp()?;
@@ -99,6 +156,7 @@ pub fn sleep(timeout: Duration, remaining: &mut Duration) -> Result<(), Error> {
     }
 }
 
+/// Updates all pending timeouts and wakes up the tasks that have reached theirs
 pub fn tick() {
     let now = PLATFORM.timestamp_source().timestamp().unwrap();
     let mut list = TICK_LIST.lock();

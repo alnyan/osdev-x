@@ -15,6 +15,7 @@ use crate::{
     },
     debug,
     device::platform::Platform,
+    fs::devfs,
     mem::{
         heap,
         phys::{self, reserved::reserve_region, PageUsage, PhysicalMemoryRegion},
@@ -179,6 +180,7 @@ pub fn kernel_main(dtb_phys: usize) -> ! {
 
         Cpu::init_local();
 
+        devfs::init();
         PLATFORM.init(true).unwrap();
 
         let dt = ARCHITECTURE.dt.get();

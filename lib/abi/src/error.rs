@@ -1,10 +1,15 @@
-#[derive(Clone, Copy, Debug)]
+use crate::io::RawFd;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Error {
     OutOfMemory = 1,
     InvalidMemoryOperation,
     AlreadyExists,
     TimedOut,
     InvalidArgument,
+    DoesNotExist,
+    IsADirectory,
+    InvalidFile,
 }
 
 pub trait FromSyscallResult: Sized {
@@ -30,6 +35,9 @@ impl TryFrom<u32> for Error {
             3 => Ok(Self::AlreadyExists),
             4 => Ok(Self::TimedOut),
             5 => Ok(Self::InvalidArgument),
+            6 => Ok(Self::DoesNotExist),
+            7 => Ok(Self::IsADirectory),
+            8 => Ok(Self::InvalidFile),
 
             _ => Err(()),
         }
@@ -44,6 +52,9 @@ impl From<Error> for u32 {
             Error::AlreadyExists => 3,
             Error::TimedOut => 4,
             Error::InvalidArgument => 5,
+            Error::DoesNotExist => 6,
+            Error::IsADirectory => 7,
+            Error::InvalidFile => 8,
         }
     }
 }
@@ -98,5 +109,22 @@ impl IntoSyscallResult for usize {
     fn into_syscall_result(self) -> usize {
         assert!((self as isize) > 0);
         self
+    }
+}
+
+impl FromSyscallResult for RawFd {
+    fn from_syscall_result(value: usize) -> Result<Self, Error> {
+        if (value as isize) < 0 {
+            Err(Error::from_syscall_error(value))
+        } else {
+            // TODO assert value < u32::MAX
+            Ok(RawFd(value as u32))
+        }
+    }
+}
+
+impl IntoSyscallResult for RawFd {
+    fn into_syscall_result(self) -> usize {
+        self.0 as usize
     }
 }

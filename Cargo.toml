@@ -3,7 +3,6 @@ members = [
     "kernel",
     "usr/test_program",
 
-    "lib/syscall",
     "lib/abi",
-    "lib/libusr"
+    "lib/vfs",
 ]

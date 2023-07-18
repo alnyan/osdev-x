@@ -5,11 +5,17 @@ use tock_registers::{
     register_bitfields, register_structs,
     registers::{ReadOnly, ReadWrite, WriteOnly},
 };
+use vfs::CharDevice;
 
 use super::SerialDevice;
 use crate::{
     arch::{aarch64::gic::IrqNumber, PLATFORM},
-    device::{interrupt::InterruptSource, platform::Platform, Device},
+    device::{
+        interrupt::InterruptSource,
+        platform::Platform,
+        tty::{CharRing, TtyDevice},
+        Device,
+    },
     mem::device::DeviceMemoryIo,
     sync::IrqSafeSpinlock,
     util::OneTimeInit,
@@ -62,11 +68,29 @@ pub struct Pl011 {
     inner: OneTimeInit<IrqSafeSpinlock<Pl011Inner>>,
     base: usize,
     irq: IrqNumber,
+    ring: CharRing<16>,
 }
 
 impl Pl011Inner {
-    fn send_byte(&mut self, b: u8) {
+    fn send_byte(&mut self, b: u8) -> Result<(), Error> {
+        while self.regs.FR.matches_all(FR::TXFF::SET) {
+            core::hint::spin_loop();
+        }
         self.regs.DR.set(b as u32);
+        Ok(())
+    }
+
+    fn recv_byte(&mut self, blocking: bool) -> Result<u8, Error> {
+        if self.regs.FR.matches_all(FR::RXFE::SET) {
+            if !blocking {
+                todo!();
+            }
+            while self.regs.FR.matches_all(FR::RXFE::SET) {
+                core::hint::spin_loop();
+            }
+        }
+
+        Ok(self.regs.DR.get() as u8)
     }
 
     unsafe fn init(&mut self) {
@@ -78,9 +102,31 @@ impl Pl011Inner {
     }
 }
 
+impl TtyDevice<16> for Pl011 {
+    fn ring(&self) -> &CharRing<16> {
+        &self.ring
+    }
+}
+
+impl CharDevice for Pl011 {
+    fn write(&self, blocking: bool, data: &[u8]) -> Result<usize, Error> {
+        assert!(blocking);
+        self.line_write(data)
+    }
+
+    fn read(&'static self, blocking: bool, data: &mut [u8]) -> Result<usize, Error> {
+        assert!(blocking);
+        self.line_read(data)
+    }
+}
+
 impl SerialDevice for Pl011 {
-    fn send(&self, byte: u8) {
-        self.inner.get().lock().send_byte(byte);
+    fn send(&self, byte: u8) -> Result<(), Error> {
+        self.inner.get().lock().send_byte(byte)
+    }
+
+    fn receive(&self, blocking: bool) -> Result<u8, Error> {
+        self.inner.get().lock().recv_byte(blocking)
     }
 }
 
@@ -102,7 +148,7 @@ impl InterruptSource for Pl011 {
         let byte = inner.regs.DR.get();
         drop(inner);
 
-        debugln!("Got byte {:#x}", byte);
+        self.recv_byte(byte as u8);
 
         Ok(())
     }
@@ -133,6 +179,7 @@ impl Pl011 {
     pub const unsafe fn new(base: usize, irq: IrqNumber) -> Self {
         Self {
             inner: OneTimeInit::new(),
+            ring: CharRing::new(),
             base,
             irq,
         }

@@ -5,6 +5,7 @@ pub mod interrupt;
 pub mod platform;
 pub mod serial;
 pub mod timer;
+pub mod tty;
 
 /// General device interface
 pub trait Device {
